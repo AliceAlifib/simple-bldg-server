@@ -186,10 +186,14 @@ defmodule BldgServer.Residents do
     update_resident(resident, changes)
   end
 
-  def enter_bldg(%Resident{} = resident, address, bldg_url) do
+  def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level) do
     {initial_x, initial_y} = {8, 40}  # TODO read from config, per bldg type
-    changes = %{flr: "#{address}/l0", flr_url: "#{bldg_url}/l0", location: "#{address}/l0/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y}
+    changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y}
     update_resident(resident, changes)
+  end
+
+  def enter_bldg(%Resident{} = resident, address, bldg_url) do
+    enter_bldg_flr(resident, address, bldg_url, 0)
   end
 
   def exit_bldg(%Resident{} = resident, address, bldg_url) do
