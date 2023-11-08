@@ -186,9 +186,20 @@ defmodule BldgServer.Residents do
     update_resident(resident, changes)
   end
 
+  def calculate_nesting_depth_from_address(address) do
+    num_slashes = address
+    |> String.split(Buildings.address_delimiter)
+    |> Enum.drop(1) |> length()
+    case num_slashes do
+      0 -> 0
+      _ -> trunc((num_slashes + 1) / 2)
+    end
+  end
+
   def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level) do
     {initial_x, initial_y} = {8, 40}  # TODO read from config, per bldg type
-    changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y}
+    nesting_depth = calculate_nesting_depth_from_address(address)
+    changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: nesting_depth}
     update_resident(resident, changes)
   end
 
@@ -205,8 +216,9 @@ defmodule BldgServer.Residents do
     {x, y} = Buildings.extract_coords(address)
     new_x = x
     new_y = y + 6
+    nesting_depth = calculate_nesting_depth_from_address(container_flr)
 
-    changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y}
+    changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y, nesting_depth: nesting_depth}
     update_resident(resident, changes)
   end
 
