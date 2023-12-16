@@ -171,7 +171,7 @@ defmodule BldgServer.Buildings do
   def extract_coords(addr) do
     # get the coords from the last part of the address: "g/b(17,24)/l0/b(-11,6)" -> ["-11","6]
     [x_s, y_s] = addr
-    |> String.split(address_delimiter)
+    |> String.split(Buildings.address_delimiter)
     |> List.last()
     |> String.slice(2..-2)
     |> String.split(",")
@@ -182,7 +182,7 @@ defmodule BldgServer.Buildings do
   def extract_flr_level(flr) do
     l_s = case flr do
       "g" -> "0"
-      _ -> flr |> String.split(address_delimiter) |> List.last() |> String.slice(1..-1)
+      _ -> flr |> String.split(Buildings.address_delimiter) |> List.last() |> String.slice(1..-1)
     end
     {level, ""} = Integer.parse(l_s)
     level
@@ -195,11 +195,11 @@ defmodule BldgServer.Buildings do
 
   def get_container(addr) do
     addr
-    |> String.split(address_delimiter)
+    |> String.split(Buildings.address_delimiter)
     |> Enum.reverse()
     |> tl()
     |> Enum.reverse()
-    |> Enum.join(address_delimiter)
+    |> Enum.join(Buildings.address_delimiter)
   end
 
   def get_container_flr(addr) do
@@ -270,7 +270,7 @@ defmodule BldgServer.Buildings do
       Map.has_key?(entity, "bldg_url") ->
         Map.get(entity, "bldg_url")
       Map.has_key?(entity, "flr_url") and Map.has_key?(entity, "name") ->
-        "#{Map.get(entity, "flr_url")}#{address_delimiter}#{Map.get(entity, "name")}"
+        "#{Map.get(entity, "flr_url")}#{Buildings.address_delimiter}#{Map.get(entity, "name")}"
       true ->
         "g"
     end
@@ -351,7 +351,7 @@ Given an entity:
 
   def calculate_nesting_depth(entity) do
     num_slashes = Map.get(entity, "address")
-    |> String.split(address_delimiter)
+    |> String.split(Buildings.address_delimiter)
     |> Enum.drop(1) |> length()
     depth = case num_slashes do
       0 -> 0
