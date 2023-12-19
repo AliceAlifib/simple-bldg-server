@@ -1,57 +1,22 @@
-# ---- Build Stage ----
-FROM elixir:1.11-alpine AS app_builder
+# Elixir + Phoenix
+ARG EX_VERSION=1.15
 
-# Set environment variables for building the application
-ENV MIX_ENV=prod \
-    TEST=1 \
-    LANG=C.UTF-8
+FROM elixir:$EX_VERSION
 
-RUN apk add --update git && \
-    rm -rf /var/cache/apk/*
+# Install debian packages
+RUN apt-get update
+RUN apt-get install --yes build-essential inotify-tools postgresql-client
 
-# Install hex and rebar
-RUN mix local.hex --force && \
-    mix local.rebar --force
+# Install Phoenix packages
+ARG PHX_VERSION=1.5.6
+RUN mix local.hex --force
+RUN mix local.rebar --force
+RUN mix archive.install hex phx_new $PHX_VERSION
 
-RUN mkdir /app
+# Install node
+# RUN curl -sL https://deb.nodesource.com/setup_6.x -o nodesource_setup.sh
+# RUN bash nodesource_setup.sh
+# RUN apt-get install --yes nodejs npm
+
 WORKDIR /app
-
-# Copy over all the necessary application files and directories
-COPY config ./config
-COPY lib ./lib
-COPY priv ./priv
-COPY mix.exs .
-COPY mix.lock .
-
-# Fetch the application dependencies and build the application
-RUN mix deps.get
-RUN mix deps.compile
-# not running phx.digest because there're currently no static files
-RUN mix release
-
-
-# ---- Application Stage ----
-FROM alpine AS app
-
-ENV LANG=C.UTF-8
-
-# Install openssl
-RUN apk add --update openssl ncurses-libs postgresql-client && \
-    rm -rf /var/cache/apk/*
-
-
-# Copy over the build artifact from the previous step and create a non root user
-RUN adduser -D -h /home/app app
-WORKDIR /home/app
-COPY --from=app_builder /app/_build .
-RUN chown -R app: ./prod
-USER app
-
-
-COPY entrypoint.sh .
-
-# Run the Phoenix app
-CMD ["./entrypoint.sh"]
-
-
-
+EXPOSE 4000

@@ -1,32 +1,35 @@
-version: '3.1'
+version: "3.2"
 
 services:
-
-  database:
+  db:
     image: postgres
-    restart: always
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: bldg_server_prod
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes: 
-      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
   web:
-    image: bldg-server
-    restart: always
+    build:
+      context: .
+      args:
+        EX_VERSION: 1.15
+        PHX_VERSION: 1.5.6
+    volumes:
+      - type: bind
+        source: .
+        target: /app
     ports:
-      - ${APP_PORT}:${APP_PORT}
+      - "4000:4000"
     environment:
-      APP_HOSTNAME: ${APP_HOSTNAME}
-      APP_PORT: ${APP_PORT}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_HOST: ${DB_HOST}
+      # Modify your config files (dev.exs and test.exs) so that the password and hostname can be overridden
+      # when environment variables are set:
+      # password: System.get_env("DB_PASSWORD", "postgres"),
+      # hostname: System.get_env("DB_HOST", "localhost"),
+      APP_HOSTNAME: localhost
+      APP_PORT: 4000
+      DB_USER: postgres
+      DB_PASSWORD: 
+      DB_HOST: db
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
     depends_on:
-      - database
-
-volumes:
-  db_data:
+      - db
+    command:
+      - ./run.sh
