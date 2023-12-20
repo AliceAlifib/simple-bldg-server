@@ -20,3 +20,4 @@ RUN mix archive.install hex phx_new $PHX_VERSION
 
 WORKDIR /app
 EXPOSE 4000
+EXPOSE 4443

@@ -18,17 +18,20 @@ services:
         target: /app
     ports:
       - "4000:4000"
+      - "4443:4443"
     environment:
       # Modify your config files (dev.exs and test.exs) so that the password and hostname can be overridden
       # when environment variables are set:
       # password: System.get_env("DB_PASSWORD", "postgres"),
       # hostname: System.get_env("DB_HOST", "localhost"),
       APP_HOSTNAME: localhost
-      APP_PORT: 4000
+      APP_PORT: 4443
       DB_USER: postgres
       DB_PASSWORD: 
       DB_HOST: db
+      DB_NAME: bldg_server_dev
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
     depends_on:
       - db
     command:

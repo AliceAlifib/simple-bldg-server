@@ -46,8 +46,9 @@ mix ecto.migrate
 
 echo "\nTesting the installation..."
 # "Prove" that install was successful by running the tests
+# TODO: Uncomment this line when tests are passing
 # mix test
 
-echo "\n Launching Phoenix web server..."
+echo "\n Launching Bldg-Server..."
 # Start the phoenix web server
 mix phx.server
