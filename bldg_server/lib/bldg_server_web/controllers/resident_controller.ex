@@ -175,6 +175,8 @@ defmodule BldgServerWeb.ResidentController do
       # TODO validate that the resident is authorized to enter the given bldg
 
       with {:ok, %Resident{} = upd_rsdt} <- Residents.enter_bldg_flr(resident, address, bldg_url, flr_level) do
+        IO.puts("enter_bldg_flr action")
+        IO.inspect(upd_rsdt)
         conn
         |> put_status(:ok)
         |> put_resp_header("location", Routes.resident_path(conn, :show, upd_rsdt))
