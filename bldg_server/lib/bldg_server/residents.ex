@@ -215,7 +215,7 @@ defmodule BldgServer.Residents do
     # determine the location next to the door of the bldg exited
     {x, y} = Buildings.extract_coords(address)
     new_x = x
-    new_y = y + 6
+    new_y = y + 2
     nesting_depth = calculate_nesting_depth_from_address(container_flr)
 
     changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y, nesting_depth: nesting_depth}
