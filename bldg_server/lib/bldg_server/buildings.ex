@@ -360,6 +360,22 @@ Given an entity:
     Map.put(entity, "nesting_depth", depth)
   end
 
+  def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 0}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "team"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 0}")
+  end
+
+  def add_composite_bldg_metadata(entity) do
+    Map.put(entity, "is_composite", false)
+  end
+
 
   def remove_build_params(entity) do
     Map.delete(entity, "container_web_url")
@@ -397,6 +413,7 @@ Given an entity:
     |> figure_out_bldg_url()
     |> decide_on_location()
     |> calculate_nesting_depth()
+    |> add_composite_bldg_metadata()
     |> remove_build_params()
   end
 
