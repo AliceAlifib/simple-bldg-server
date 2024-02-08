@@ -360,16 +360,18 @@ Given an entity:
     Map.put(entity, "nesting_depth", depth)
   end
 
+  # TODO get this from config
+
   def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 0}")
+    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 0.03}")
   end
 
   def add_composite_bldg_metadata(%{"entity_type" => "team"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 0}")
+    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 10}")
   end
 
   def add_composite_bldg_metadata(entity) do
