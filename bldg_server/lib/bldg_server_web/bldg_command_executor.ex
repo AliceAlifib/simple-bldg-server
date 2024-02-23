@@ -130,6 +130,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           }
           Buildings.build(entity)
           |> Buildings.create_bldg()
+          |> Buildings.update_containers()
         end
     end
 
@@ -162,6 +163,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 
@@ -194,6 +196,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 
@@ -226,6 +229,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 
@@ -259,6 +263,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 
@@ -290,6 +295,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 
@@ -322,6 +328,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 
@@ -355,6 +362,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
+        |> Buildings.update_containers()
       end
     end
 

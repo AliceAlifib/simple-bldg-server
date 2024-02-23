@@ -90,6 +90,7 @@ defmodule BldgServer.Buildings do
         "say_text" => "#{action} #{subject} done"
       }
       say(container, msg)
+      notify_bldg_change({:ok, container}, action, subject)
     end
   end
 
@@ -130,6 +131,7 @@ defmodule BldgServer.Buildings do
 
   """
   def update_bldg(%Bldg{} = bldg, attrs) do
+    IO.puts("~~~~ updating bldg #{bldg.name} with attrs: #{inspect(attrs)}")
     bldg
     |> Bldg.changeset(attrs)
     |> Repo.update()
@@ -163,6 +165,19 @@ defmodule BldgServer.Buildings do
   """
   def change_bldg(%Bldg{} = bldg) do
     Bldg.changeset(bldg, %{})
+  end
+
+  def update_containers({:ok, %Bldg{} = bldg}) do
+    # Update the updated_at field of all containers of
+    # the given bldg
+    IO.puts("~~~~ updating containers called for bldg: #{bldg.name}")
+    container_addr = get_container(bldg.flr)
+    IO.puts("~~~~ the container_addr of #{bldg.name} is: #{inspect(container_addr)}")
+    if container_addr != "" do
+      get_bldg!(container_addr)
+      |> update_bldg(%{"updated_at" => DateTime.utc_now()})
+      |> update_containers() #  continue recursively to next container
+    end
   end
 
 
