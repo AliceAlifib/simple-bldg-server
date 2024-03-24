@@ -22,11 +22,11 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
 
 
   def send_message_to_battery(callback_url, msg) do
-    Logger.info("~~~~~ About to invoke battery callback URL at: #{callback_url}")
+    {_, msg_json} = Jason.encode(msg)
+    IO.puts("~~~~~ About to invoke battery callback URL at: #{callback_url}")
+    IO.inspect(msg_json)
     header_key = "content-type"
     header_val = "application/json"
-    {_, msg_json} = Jason.encode(msg)
-    IO.inspect(msg_json)
     Finch.build(:post, callback_url, [{header_key, header_val}], msg_json)
     |> Finch.request(FinchClient)
     |> IO.inspect()
@@ -36,7 +36,8 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
   #def handle_info({sender, message, flr}, state) do
   def handle_info(%{event: "new_message", payload: new_message}, state) do
     #Logger.info("chat message received at #{flr} from #{sender}: #{message}")
-    Logger.info("~~~~~~~~~~~ [battery chat dispatcher] chat message received: #{new_message["message"]}")
+    IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received:")
+    IO.inspect(new_message)
 
     # query for all batteries inside that message flr
     # & invoke the callback url per each battery, with the message details in the body

@@ -65,29 +65,48 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_change({:error, created_bldg}, action, subject) do
     # notification parameters
-    %{"flr" => container_flr} = created_bldg
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    IO.puts("~~~~~ at notify_bldg_change - FAILURE: #{name}")
     container_addr = get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
     container = get_bldg!(container_addr)
     msg = %{
       "say_speaker" => "bldg_server",
-      "say_text" => "#{action} #{subject} failed"
+      "say_text" => "/notify #{action} failed: #{subject}",
+      "action_type" => "SAY",
+      "bldg_url" => "",
+      "say_flr" => container_flr,
+      "say_flr_url" => container_flr_url,
+      "say_mimetype" => "text/plain",
+      "say_recipient" => "",
+      "say_time" => 0,
+      "resident_email" => "bldg_server",
+      "say_location" => ""
     }
     say(container, msg)
   end
 
   def notify_bldg_change({:ok, created_bldg}, action, subject) do
     # notification parameters
-    IO.puts("~~~~~ at notify_bldg_change")
-    %BldgServer.Buildings.Bldg{flr: container_flr} = created_bldg
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    IO.puts("~~~~~ at notify_bldg_change - SUCCESS: #{name}")
     container_addr = get_container(container_flr)
-    # IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+    IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
     if container_addr != "" do
       # TODO handle the case where the container is g
       container = get_bldg!(container_addr)
       msg = %{
         "say_speaker" => "bldg_server",
-        "say_text" => "#{action} #{subject} done"
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
       }
       say(container, msg)
       # recurse to parent container
@@ -112,7 +131,7 @@ defmodule BldgServer.Buildings do
     |> Bldg.changeset(attrs)
     case cs.errors do
       [] -> Repo.insert(cs)
-            |> notify_bldg_change("create bldg", attrs["name"])
+            |> notify_bldg_change("bldg_created", attrs["bldg_url"])
       _ ->
         IO.inspect(cs.errors)
         raise "Failed to prepare bldg for writing to database"
