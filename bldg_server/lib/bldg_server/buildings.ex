@@ -129,9 +129,13 @@ defmodule BldgServer.Buildings do
   def create_bldg(attrs \\ %{}) do
     cs = %Bldg{}
     |> Bldg.changeset(attrs)
+    # TODO figure out better way to notify bldg_url & address
+    created_bldg_url = attrs["bldg_url"]
+    created_bldg_address = attrs["address"]
+    created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}"
     case cs.errors do
       [] -> Repo.insert(cs)
-            |> notify_bldg_change("bldg_created", attrs["bldg_url"])
+            |> notify_bldg_change("bldg_created", created_bldg_ids)
       _ ->
         IO.inspect(cs.errors)
         raise "Failed to prepare bldg for writing to database"
