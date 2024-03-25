@@ -65,25 +65,25 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_change({:error, created_bldg}, action, subject) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
-    IO.puts("~~~~~ at notify_bldg_change - FAILURE: #{name}")
-    container_addr = get_container(container_flr)
-    IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
-    container = get_bldg!(container_addr)
-    msg = %{
-      "say_speaker" => "bldg_server",
-      "say_text" => "/notify #{action} failed: #{subject}",
-      "action_type" => "SAY",
-      "bldg_url" => "",
-      "say_flr" => container_flr,
-      "say_flr_url" => container_flr_url,
-      "say_mimetype" => "text/plain",
-      "say_recipient" => "",
-      "say_time" => 0,
-      "resident_email" => "bldg_server",
-      "say_location" => ""
-    }
-    say(container, msg)
+    # %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    IO.puts("~~~~~ at notify_bldg_change - FAILURE: #{subject}")
+    # container_addr = get_container(container_flr)
+    # IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+    # container = get_bldg!(container_addr)
+    # msg = %{
+    #   "say_speaker" => "bldg_server",
+    #   "say_text" => "/notify #{action} failed: #{subject}",
+    #   "action_type" => "SAY",
+    #   "bldg_url" => "",
+    #   "say_flr" => container_flr,
+    #   "say_flr_url" => container_flr_url,
+    #   "say_mimetype" => "text/plain",
+    #   "say_recipient" => "",
+    #   "say_time" => 0,
+    #   "resident_email" => "bldg_server",
+    #   "say_location" => ""
+    # }
+    # say(container, msg)
   end
 
   def notify_bldg_change({:ok, created_bldg}, action, subject) do
