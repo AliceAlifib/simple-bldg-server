@@ -405,19 +405,25 @@ Given an entity:
   def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": 0.03}")
+    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.03\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "milestone"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"0.63\", \"flr0_height\": \"0.0\"}")
   end
 
   def add_composite_bldg_metadata(%{"entity_type" => "sales"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": 0.356, \"flr0_height\": 0.05}")
+    |> Map.put("data", "{\"flr_height\": 0.356, \"flr0_height\": \"0.05\"}")
   end
 
   def add_composite_bldg_metadata(%{"entity_type" => "team"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": 0.7, \"flr0_height\": 10}")
+    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.05\"}")
   end
 
   def add_composite_bldg_metadata(entity) do
