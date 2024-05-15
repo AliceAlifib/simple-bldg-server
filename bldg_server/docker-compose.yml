@@ -14,7 +14,7 @@ services:
       - ./devops/db/initial_db_data.sql:/docker-entrypoint-initdb.d/initial_db_data.sql
 
   web:
-    image: dibaunaumh/bldg-server:v060
+    image: dibaunaumh/bldg-server:v061
     volumes:
       - type: bind
         source: .
