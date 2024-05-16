@@ -36,7 +36,7 @@ FROM alpine AS app
 ENV LANG=C.UTF-8
 
 # Install openssl
-RUN apk add --update openssl ncurses-libs postgresql-client && \
+RUN apk add --update bash openssl libgcc ncurses-libs postgresql-client libstdc++ && \
     rm -rf /var/cache/apk/*
 
 

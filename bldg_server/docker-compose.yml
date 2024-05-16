@@ -5,16 +5,21 @@ services:
     image: postgres
     restart: always
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"
     volumes:
       - ./devops/db/initial_db_data.sql:/docker-entrypoint-initdb.d/initial_db_data.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   web:
-    image: dibaunaumh/bldg-server:v061
+    image: dibaunaumh/bldg-server:v062
     volumes:
       - type: bind
         source: .
@@ -22,20 +27,9 @@ services:
     ports:
       - "4000:4000"
       - "4443:4443"
-    environment:
-      # Modify your config files (dev.exs and test.exs) so that the password and hostname can be overridden
-      # when environment variables are set:
-      # password: System.get_env("DB_PASSWORD", "postgres"),
-      # hostname: System.get_env("DB_HOST", "localhost"),
-      APP_HOSTNAME: localhost
-      APP_PORT: 4443
-      DB_USER: postgres
-      DB_PASSWORD: 
-      DB_HOST: db
-      DB_NAME: bldg_server_dev
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+    env_file: docker.env
     depends_on:
-      - db
+      db:
+          condition: service_healthy
     # command:
     #   - ./run.sh
