@@ -2,7 +2,7 @@
 FROM elixir:1.15-alpine AS app_builder
 
 # Set environment variables for building the application
-ENV MIX_ENV=prod \
+ENV MIX_ENV=dev \
     TEST=1 \
     LANG=C.UTF-8
 
@@ -44,7 +44,7 @@ RUN apk add --update bash openssl libgcc ncurses-libs postgresql-client libstdc+
 RUN adduser -D -h /home/app app
 WORKDIR /home/app
 COPY --from=app_builder /app/_build .
-RUN chown -R app: ./prod
+RUN chown -R app: ./dev
 USER app
 
 
