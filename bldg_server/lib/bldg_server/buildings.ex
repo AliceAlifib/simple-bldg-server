@@ -491,7 +491,10 @@ Given an entity:
     |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
     |> JSON.encode()
 
-    new_prev_messages = append_message_to_list(bldg.previous_messages, text)
+    prev_messages = Utils.limit_list_to(bldg.previous_messages, 100)
+    IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
+
+    new_prev_messages = append_message_to_list(prev_messages, text)
     changes = %{previous_messages: new_prev_messages}
     result = update_bldg(bldg, changes)
 

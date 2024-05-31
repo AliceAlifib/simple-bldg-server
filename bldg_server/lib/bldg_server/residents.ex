@@ -237,13 +237,15 @@ defmodule BldgServer.Residents do
 
   def is_command(msg_text), do: String.at(msg_text, 0) == "/"
 
-
   def say(%Resident{} = resident, msg) do
     {_, text} = msg
     |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
     |> JSON.encode()
 
-    new_prev_messages = append_message_to_list(resident.previous_messages, text)
+    prev_messages = Utils.limit_list_to(resident.previous_messages, 100)
+    IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
+
+    new_prev_messages = append_message_to_list(prev_messages, text)
     changes = %{previous_messages: new_prev_messages}
     result = update_resident(resident, changes)
 

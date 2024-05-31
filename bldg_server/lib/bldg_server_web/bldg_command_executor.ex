@@ -428,7 +428,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     end
 
     def execute_command(msg_parts, _msg) do
-      Logger.info("Ignoring unknown command: #{msg_parts}")
+      Logger.info("Ignoring unknown command:")
+      IO.inspect(msg_parts)
     end
 
     #def handle_info({sender, message, flr}, state) do
