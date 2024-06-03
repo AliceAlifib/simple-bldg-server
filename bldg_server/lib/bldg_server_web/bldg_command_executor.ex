@@ -360,8 +360,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
     # move bldg
     def execute_command(["/move", "bldg", name, "here"], msg) do
-      # update the location of the bldg with the given website to the say location
-      # TODO validate that the actor resident/bldg has the sufficient permissions
+      # update the location of the bldg with the given name to the say location
       # TODO composite bldgs should update the location of their children bldgs as well
       {x, y} = Buildings.extract_coords(msg["say_location"])
       flr_url = msg["say_flr_url"]
@@ -372,6 +371,25 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         raise "Unauthorized"
       else
         Buildings.update_bldg(bldg, %{"address" => msg["say_location"], "x" => x, "y" => y})
+      end
+    end
+
+
+    # relocate bldg
+    def execute_command(["/relocate", "bldg", bldg_url, "here"], msg) do
+      # update the bldg_url & address of the bldg with the given bldg_url to the say location
+      # TODO composite bldgs should update the location of their children bldgs as well
+      # TODO handle location collisions
+      {x, y} = Buildings.extract_coords(msg["say_location"])
+      name = Buildings.extract_name(bldg_url)
+      flr_url = msg["say_flr_url"]
+      new_bldg_url = "#{flr_url}#{Buildings.address_delimiter}#{name}"
+      bldg = Buildings.get_by_bldg_url(bldg_url)
+      # verify that the speaker is also an owner
+      if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+        raise "Unauthorized"
+      else
+        Buildings.update_bldg(bldg, %{"bldg_url" => new_bldg_url, "address" => msg["say_location"], "x" => x, "y" => y})
       end
     end
 

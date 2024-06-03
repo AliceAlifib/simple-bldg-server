@@ -228,6 +228,10 @@ defmodule BldgServer.Buildings do
     level
   end
 
+  def extract_name(bldg_url) do
+    bldg_url |> String.split(address_delimiter()) |> List.last()
+  end
+
   def move_from_speaker({x, y}, offset) do
     {x, y + offset}
   end
