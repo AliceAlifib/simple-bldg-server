@@ -33,3 +33,13 @@ services:
           condition: service_healthy
     # command:
     #   - ./run.sh
+  redis:
+      image: redis
+      container_name: redis-server
+      ports:
+        - "6379:6379"
+      volumes:
+        - redis-data:/data
+
+volumes:
+      redis-data:
