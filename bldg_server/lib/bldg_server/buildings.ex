@@ -63,10 +63,10 @@ defmodule BldgServer.Buildings do
     Repo.all(q)
   end
 
-  def notify_bldg_change({:error, created_bldg}, action, subject) do
+  def notify_bldg_created({:error, created_bldg}, action, subject) do
     # notification parameters
     # %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
-    IO.puts("~~~~~ at notify_bldg_change - FAILURE: #{subject}")
+    IO.puts("~~~~~ at notify_bldg_created - FAILURE: #{subject}")
     # container_addr = get_container(container_flr)
     # IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
     # container = get_bldg!(container_addr)
@@ -86,10 +86,10 @@ defmodule BldgServer.Buildings do
     # say(container, msg)
   end
 
-  def notify_bldg_change({:ok, created_bldg}, action, subject) do
+  def notify_bldg_created({:ok, created_bldg}, action, subject) do
     # notification parameters
     %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
-    IO.puts("~~~~~ at notify_bldg_change - SUCCESS: #{name}")
+    IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
     container_addr = get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
     if container_addr != "" do
@@ -110,9 +110,46 @@ defmodule BldgServer.Buildings do
       }
       say(container, msg)
       # recurse to parent container
-      notify_bldg_change({:ok, container}, action, subject)
+      notify_bldg_created({:ok, container}, action, subject)
     end
   end
+
+  def notify_bldg_updated({:error, _}, _, subject, _) do
+    # notification parameters
+    # %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    IO.puts("~~~~~ at notify_bldg_updated - FAILURE: #{subject}")
+  end
+
+  def notify_bldg_updated({:ok, updated_bldg} = update_result, action, subject, attrs) do
+    # notification parameters
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = updated_bldg
+    IO.puts("~~~~~ at notify_bldg_updated #{action} - SUCCESS: #{name}")
+
+    container_addr = get_container(container_flr)
+    IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      notify_bldg_created({:ok, container}, action, subject)
+    end
+    update_result
+  end
+
 
   @doc """
   Creates a bldg.
@@ -135,7 +172,7 @@ defmodule BldgServer.Buildings do
     created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}"
     case cs.errors do
       [] -> Repo.insert(cs)
-            |> notify_bldg_change("bldg_created", created_bldg_ids)
+            |> notify_bldg_created("bldg_created", created_bldg_ids)
       _ ->
         IO.inspect(cs.errors)
         raise "Failed to prepare bldg for writing to database"
@@ -155,11 +192,23 @@ defmodule BldgServer.Buildings do
 
   """
   def update_bldg(%Bldg{} = bldg, attrs) do
-    # IO.puts("~~~~ updating bldg #{bldg.name} with attrs: #{inspect(attrs)}")
-    bldg
-    |> Bldg.changeset(attrs)
-    |> Repo.update()
-    # TODO invoke notify_bldg_change but avoid recursion
+    IO.puts("~~~~ updating bldg #{bldg.name} with attrs: #{inspect(attrs)}")
+
+    # TODO figure out better way to notify bldg_url & address
+    updated_bldg_url = attrs["bldg_url"]
+    updated_bldg_address = attrs["address"]
+    updated_bldg_ids = "#{updated_bldg_url}|#{updated_bldg_address}"
+    if Map.has_key?(attrs, :previous_messages) do
+      # don't notify on chat updates
+      bldg
+      |> Bldg.changeset(attrs)
+      |> Repo.update()
+    else
+      bldg
+      |> Bldg.changeset(attrs)
+      |> Repo.update()
+      |> notify_bldg_updated("bldg_updated", updated_bldg_ids, attrs)
+    end
   end
 
   @doc """

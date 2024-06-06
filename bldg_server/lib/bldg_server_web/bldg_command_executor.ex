@@ -389,6 +389,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
         raise "Unauthorized"
       else
+        # TODO address may not be exactly the say_location
         Buildings.update_bldg(bldg, %{"bldg_url" => new_bldg_url, "address" => msg["say_location"], "x" => x, "y" => y})
       end
     end

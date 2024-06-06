@@ -12,11 +12,14 @@ defmodule BldgServerWeb.BldgController do
   end
 
   def create(conn, %{"bldg" => bldg_params}) do
-    with {:ok, %Bldg{} = bldg} <- Buildings.create_bldg(bldg_params) do
-      conn
-      |> put_status(:created)
-      |> put_resp_header("location", Routes.bldg_path(conn, :show, bldg))
-      |> render("show.json", bldg: bldg)
+    case Buildings.create_bldg(bldg_params) do
+      {:ok, %Bldg{} = bldg} ->
+        conn
+        |> put_status(:created)
+        |> put_resp_header("location", Routes.bldg_path(conn, :show, bldg))
+        |> render("show.json", bldg: bldg)
+      {:error, error_message} ->
+        IO.puts(error_message)
     end
   end
 
@@ -85,11 +88,14 @@ defmodule BldgServerWeb.BldgController do
     bldg = Buildings.get_by_bldg_url(bldg_url)
     # TODO verify that the battery has a valid session & access & chat permissions in this bldg
 
-    with {:ok, %Bldg{} = upd_bldg} <- Buildings.say(bldg, msg) do
-      conn
-      |> put_status(:ok)
-      |> put_resp_header("location", Routes.bldg_path(conn, :show, upd_bldg))
-      |> render("show.json", bldg: upd_bldg)
+    case Buildings.say(bldg, msg) do
+      {:ok, %Bldg{} = upd_bldg} ->
+        conn
+        |> put_status(:ok)
+        |> put_resp_header("location", Routes.bldg_path(conn, :show, upd_bldg))
+        |> render("show.json", bldg: upd_bldg)
+      {:error, e} ->
+        IO.inspect(e)
     end
   end
 end
