@@ -502,10 +502,10 @@ Given an entity:
   def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.03\"}")
+    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"1.11\"}")
   end
 
-  def add_composite_bldg_metadata(%{"entity_type" => "service"} = entity) do
+  def add_composite_bldg_metadata(%{"entity_type" => "stage"} = entity) do
     entity
     |> Map.put("is_composite", true)
     |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.03\"}")
