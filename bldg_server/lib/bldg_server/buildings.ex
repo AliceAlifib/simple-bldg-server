@@ -63,16 +63,11 @@ defmodule BldgServer.Buildings do
     Repo.all(q)
   end
 
-  def notify_bldg_created({:error, created_bldg}, action, subject) do
-    # notification parameters
-    IO.puts("~~~~~ at notify_bldg_created - FAILURE: #{subject}")
-    [bldg_url, address] = String.split(subject, "|")
-    container_flr = get_container_flr(address)
-    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr: #{inspect(container_flr)}")
-    container_flr_url = get_container(bldg_url)
-    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr_url: #{inspect(container_flr_url)}")
-    container_addr = get_container(container_flr)
+  def notify_bldg_created({:error, %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url}}, action, subject) do
+    # recursive call, no need to extract location from subject
+    IO.puts("Recursive call to notify on bldg-creation-failure")
     action = "failed_to_create_bldg"
+    container_addr = get_container(container_flr)
 
     if container_addr != "" do
       # TODO handle the case where the container is g
@@ -92,11 +87,48 @@ defmodule BldgServer.Buildings do
       }
       say(container, msg)
       # recurse to parent container
-      subject = "#{container.bldg_url}|#{container.address}"
       notify_bldg_created({:error, container}, action, subject)
     end
 
   end
+
+
+  def notify_bldg_created({:error, error_description}, action, subject) do
+    IO.puts("~~~~~ 1st call to notify on bldg creation error: #{inspect(error_description)}")
+    # notification parameters
+    # extract location from subject
+    IO.puts("~~~~~ at notify_bldg_created - FAILURE: #{subject}")
+    [bldg_url, address] = String.split(subject, "|")
+    container_flr = get_container_flr(address)
+    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr: #{inspect(container_flr)}")
+    container_flr_url = get_container(bldg_url)
+    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr_url: #{inspect(container_flr_url)}")
+    action = "failed_to_create_bldg"
+    container_addr = get_container(container_flr)
+
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      notify_bldg_created({:error, container}, action, subject)
+    end
+
+  end
+
 
   def notify_bldg_created({:ok, created_bldg}, action, subject) do
     # notification parameters
