@@ -389,12 +389,22 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         nil ->
           IO.puts("Bldg given to relocate couldn't be found: #{bldg_url}")
         _ ->
+          attrs = %{
+            "bldg_url" => new_bldg_url,
+            "address" => msg["say_location"],
+            "x" => x,
+            "y" => y,
+            "flr" => msg["say_flr"],
+            "flr_url" => flr_url,
+            "nesting_depth" => bldg.nesting_depth + 1,
+            "flr_level" => Buildings.extract_flr_level(msg["say_flr"])
+          }
           # verify that the speaker is also an owner
           if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
             raise "Unauthorized"
           else
             # TODO address may not be exactly the say_location
-            Buildings.update_bldg(bldg, %{"bldg_url" => new_bldg_url, "address" => msg["say_location"], "x" => x, "y" => y})
+            Buildings.update_bldg(bldg, attrs)
           end
       end
     end

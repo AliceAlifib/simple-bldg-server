@@ -65,25 +65,37 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_created({:error, created_bldg}, action, subject) do
     # notification parameters
-    # %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
     IO.puts("~~~~~ at notify_bldg_created - FAILURE: #{subject}")
-    # container_addr = get_container(container_flr)
-    # IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
-    # container = get_bldg!(container_addr)
-    # msg = %{
-    #   "say_speaker" => "bldg_server",
-    #   "say_text" => "/notify #{action} failed: #{subject}",
-    #   "action_type" => "SAY",
-    #   "bldg_url" => "",
-    #   "say_flr" => container_flr,
-    #   "say_flr_url" => container_flr_url,
-    #   "say_mimetype" => "text/plain",
-    #   "say_recipient" => "",
-    #   "say_time" => 0,
-    #   "resident_email" => "bldg_server",
-    #   "say_location" => ""
-    # }
-    # say(container, msg)
+    [bldg_url, address] = String.split(subject, "|")
+    container_flr = get_container_flr(address)
+    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr: #{inspect(container_flr)}")
+    container_flr_url = get_container(bldg_url)
+    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr_url: #{inspect(container_flr_url)}")
+    container_addr = get_container(container_flr)
+    action = "failed_to_create_bldg"
+
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      subject = "#{container.bldg_url}|#{container.address}"
+      notify_bldg_created({:error, container}, action, subject)
+    end
+
   end
 
   def notify_bldg_created({:ok, created_bldg}, action, subject) do
@@ -145,7 +157,7 @@ defmodule BldgServer.Buildings do
       }
       say(container, msg)
       # recurse to parent container
-      notify_bldg_created({:ok, container}, action, subject)
+      notify_bldg_updated({:ok, container}, action, subject, attrs)
     end
     update_result
   end
@@ -456,6 +468,12 @@ Given an entity:
   # TODO get this from config
 
   def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.03\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "service"} = entity) do
     entity
     |> Map.put("is_composite", true)
     |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.03\"}")
