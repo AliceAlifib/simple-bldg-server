@@ -385,6 +385,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       flr_url = msg["say_flr_url"]
       new_bldg_url = "#{flr_url}#{Buildings.address_delimiter}#{name}"
       bldg = Buildings.get_by_bldg_url(bldg_url)
+      container_bldg = Buildings.get_by_bldg_url(Buildings.get_container(flr_url))
       case bldg do
         nil ->
           IO.puts("Bldg given to relocate couldn't be found: #{bldg_url}")
@@ -396,7 +397,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
             "y" => y,
             "flr" => msg["say_flr"],
             "flr_url" => flr_url,
-            "nesting_depth" => bldg.nesting_depth + 1,
+            "nesting_depth" => container_bldg.nesting_depth + 1,
             "flr_level" => Buildings.extract_flr_level(msg["say_flr"])
           }
           # verify that the speaker is also an owner

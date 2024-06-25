@@ -529,6 +529,12 @@ Given an entity:
     |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.05\"}")
   end
 
+  def add_composite_bldg_metadata(%{"entity_type" => "costs"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.05\"}")
+  end
+
   def add_composite_bldg_metadata(entity) do
     Map.put(entity, "is_composite", false)
   end
