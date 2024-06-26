@@ -520,7 +520,7 @@ Given an entity:
   def add_composite_bldg_metadata(%{"entity_type" => "sales"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": 0.356, \"flr0_height\": \"0.05\"}")
+    |> Map.put("data", "{\"flr_height\": 0.356, \"flr0_height\": \"0.08\"}")
   end
 
   def add_composite_bldg_metadata(%{"entity_type" => "team"} = entity) do
@@ -532,7 +532,7 @@ Given an entity:
   def add_composite_bldg_metadata(%{"entity_type" => "costs"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"1.9\", \"flr0_height\": \"0.03\"}")
+    |> Map.put("data", "{\"flr_height\": \"1.9\", \"flr0_height\": \"0.05\"}")
   end
 
   def add_composite_bldg_metadata(entity) do
