@@ -385,10 +385,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       flr_url = msg["say_flr_url"]
       new_bldg_url = "#{flr_url}#{Buildings.address_delimiter}#{name}"
       bldg = Buildings.get_by_bldg_url(bldg_url)
-      container_bldg = Buildings.get_by_bldg_url(Buildings.get_container(flr_url))
-      case bldg do
-        nil ->
+      container_bldg_url = Buildings.get_container(flr_url)
+      container_bldg = Buildings.get_by_bldg_url(container_bldg_url)
+      case {bldg,  container_bldg} do
+        {nil, _} ->
           IO.puts("Bldg given to relocate couldn't be found: #{bldg_url}")
+        {_, nil} ->
+          IO.puts("Container of bldg given to relocate couldn't be found: #{container_bldg_url}")
         _ ->
           attrs = %{
             "bldg_url" => new_bldg_url,
