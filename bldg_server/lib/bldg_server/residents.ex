@@ -242,7 +242,7 @@ defmodule BldgServer.Residents do
     |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
     |> JSON.encode()
 
-    prev_messages = Utils.limit_list_to(resident.previous_messages, 100)
+    prev_messages = Utils.limit_list_to(resident.previous_messages, 10)
     IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
 
     new_prev_messages = append_message_to_list(prev_messages, text)
