@@ -23,7 +23,7 @@ config :bldg_server, BldgServerWeb.Endpoint,
           keyfile: "priv/cert/localhost.key",
           certfile: "priv/cert/localhost.cert"],
   debug_errors: true,
-  code_reloader: true,
+  code_reloader: false,
   check_origin: false,
   watchers: []
 
