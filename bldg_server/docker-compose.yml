@@ -19,7 +19,7 @@ services:
       retries: 5
 
   web:
-    image: dibaunaumh/bldg-server:v063
+    image: dibaunaumh/bldg-server:v066
     volumes:
       - type: bind
         source: .
