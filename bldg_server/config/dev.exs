@@ -4,7 +4,7 @@ use Mix.Config
 config :bldg_server, BldgServer.Repo,
   username: System.get_env("DB_USER", "postgres"),
   password: System.get_env("DB_PASSWORD", ""),
-  database: "bldg_server_dev",
+  database: "postgres",
   hostname: System.get_env("DB_HOST", "db"),
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
