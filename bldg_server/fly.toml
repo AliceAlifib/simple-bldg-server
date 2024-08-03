@@ -1,0 +1,45 @@
+# fly.toml app configuration file generated for bldg-server on 2024-07-25T20:25:23-07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'bldg-server'
+primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+
+[build]
+
+[deploy]
+  release_command = '/app/bin/migrate'
+
+[env]
+  PHX_HOST = 'bldg-server.fly.dev'
+  PORT = '8080'
+  APP_HOSTNAME = 'bldg-server.fly.dev'
+  APP_PORT = '8080'
+  SENDGRID_API_KEY = 'notasecret'
+  DB_HOST = 'bldg-server-db.internal'
+  DB_NAME = 'bldg_server'
+  DB_PASSWORD = 'KaE55yMZqO7VHjY'
+  DB_PORT = '5433'
+  DB_SSL = 'false'
+  DB_USER = 'bldg_server'
+
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 1000
+    soft_limit = 1000
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
