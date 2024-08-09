@@ -10,6 +10,7 @@ defmodule BldgServer.Residents do
   alias BldgServer.ResidentsAuth
   alias BldgServer.Buildings
 
+  require Logger
 
   # alias BldgServerWeb.Router.Helpers, as: Routes
 
@@ -196,26 +197,33 @@ defmodule BldgServer.Residents do
     end
   end
 
-  def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level) do
-    {initial_x, initial_y} = {8, 40}  # TODO read from config, per bldg type
+  def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level, post_enter_x, post_enter_y) do
+    {initial_x, initial_y} = {post_enter_x, post_enter_y}
     nesting_depth = calculate_nesting_depth_from_address(address)
     changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: nesting_depth}
     update_resident(resident, changes)
   end
 
-  def enter_bldg(%Resident{} = resident, address, bldg_url) do
-    enter_bldg_flr(resident, address, bldg_url, 0)
+
+  def enter_bldg(%Resident{} = resident, address, bldg_url, post_enter_x, post_enter_y) do
+    enter_bldg_flr(resident, address, bldg_url, 0, post_enter_x, post_enter_y)
   end
 
-  def exit_bldg(%Resident{} = resident, address, bldg_url) do
+  def enter_bldg(%Resident{} = resident, address, bldg_url) do
+    enter_bldg_flr(resident, address, bldg_url, 0, 0, 0)
+  end
+
+  def exit_bldg(%Resident{} = resident, address, bldg_url, post_exit_x, post_exit_y) do
     # get the container flr
     container_flr = Buildings.get_container_flr(address)
     container_flr_url = Buildings.get_container_flr_url(bldg_url)
 
-    # determine the location next to the door of the bldg exited
-    {x, y} = Buildings.extract_coords(address)
-    new_x = x
-    new_y = y + 2
+    # # determine the location next to the door of the bldg exited
+    # {x, y} = Buildings.extract_coords(address)
+    # new_x = x
+    # new_y = y + 2
+    new_x = post_exit_x
+    new_y = post_exit_y
     nesting_depth = calculate_nesting_depth_from_address(container_flr)
 
     changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y, nesting_depth: nesting_depth}
