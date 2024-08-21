@@ -29,6 +29,7 @@ defmodule BldgServerWeb.ResidentView do
       direction: resident.direction,
       previous_messages: resident.previous_messages,
       other_attributes: resident.other_attributes,
+      nesting_depth: resident.nesting_depth,
       session_id: resident.session_id,
       last_login_at: resident.last_login_at,
       updated_at: resident.updated_at

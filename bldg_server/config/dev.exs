@@ -2,10 +2,10 @@ use Mix.Config
 
 # Configure your database
 config :bldg_server, BldgServer.Repo,
-  username: "udi",
-  password: "",
-  database: "bldg_server_dev",
-  hostname: "localhost",
+  username: System.get_env("DB_USER", "postgres"),
+  password: System.get_env("DB_PASSWORD", ""),
+  database: "postgres",
+  hostname: System.get_env("DB_HOST", "db"),
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
@@ -19,10 +19,11 @@ config :bldg_server, BldgServerWeb.Endpoint,
   http: [port: 4000],
   https: [port: 4443,
           otp_app: :bldg_server,
+          cipher_suite: :strong,
           keyfile: "priv/cert/localhost.key",
           certfile: "priv/cert/localhost.cert"],
   debug_errors: true,
-  code_reloader: true,
+  code_reloader: false,
   check_origin: false,
   watchers: []
 

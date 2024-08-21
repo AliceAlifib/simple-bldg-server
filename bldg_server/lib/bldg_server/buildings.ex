@@ -63,6 +63,138 @@ defmodule BldgServer.Buildings do
     Repo.all(q)
   end
 
+  def notify_bldg_created({:error, %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url}}, action, subject) do
+    # recursive call, no need to extract location from subject
+    IO.puts("Recursive call to notify on bldg-creation-failure")
+    action = "failed_to_create_bldg"
+    container_addr = get_container(container_flr)
+
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      notify_bldg_created({:error, container}, action, subject)
+    end
+
+  end
+
+
+  def notify_bldg_created({:error, error_description}, action, subject) do
+    IO.puts("~~~~~ 1st call to notify on bldg creation error: #{inspect(error_description)}")
+    # notification parameters
+    # extract location from subject
+    IO.puts("~~~~~ at notify_bldg_created - FAILURE: #{subject}")
+    [bldg_url, address] = String.split(subject, "|")
+    container_flr = get_container_flr(address)
+    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr: #{inspect(container_flr)}")
+    container_flr_url = get_container(bldg_url)
+    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr_url: #{inspect(container_flr_url)}")
+    action = "failed_to_create_bldg"
+    container_addr = get_container(container_flr)
+
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      notify_bldg_created({:error, container}, action, subject)
+    end
+
+  end
+
+
+  def notify_bldg_created({:ok, created_bldg}, action, subject) do
+    # notification parameters
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
+    container_addr = get_container(container_flr)
+    IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      notify_bldg_created({:ok, container}, action, subject)
+    end
+  end
+
+  def notify_bldg_updated({:error, _}, _, subject, _) do
+    # notification parameters
+    # %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    IO.puts("~~~~~ at notify_bldg_updated - FAILURE: #{subject}")
+  end
+
+  def notify_bldg_updated({:ok, updated_bldg} = update_result, action, subject, attrs) do
+    # notification parameters
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = updated_bldg
+    IO.puts("~~~~~ at notify_bldg_updated #{action} - SUCCESS: #{name}")
+
+    container_addr = get_container(container_flr)
+    IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+    if container_addr != "" do
+      # TODO handle the case where the container is g
+      container = get_bldg!(container_addr)
+      msg = %{
+        "say_speaker" => "bldg_server",
+        "say_text" => "/notify #{action} done: #{subject}",
+        "action_type" => "SAY",
+        "bldg_url" => "",
+        "say_flr" => container_flr,
+        "say_flr_url" => container_flr_url,
+        "say_mimetype" => "text/plain",
+        "say_recipient" => "",
+        "say_time" => 0,
+        "resident_email" => "bldg_server",
+        "say_location" => ""
+      }
+      say(container, msg)
+      # recurse to parent container
+      notify_bldg_updated({:ok, container}, action, subject, attrs)
+    end
+    update_result
+  end
+
+
   @doc """
   Creates a bldg.
 
@@ -78,8 +210,13 @@ defmodule BldgServer.Buildings do
   def create_bldg(attrs \\ %{}) do
     cs = %Bldg{}
     |> Bldg.changeset(attrs)
+    # TODO figure out better way to notify bldg_url & address
+    created_bldg_url = attrs["bldg_url"]
+    created_bldg_address = attrs["address"]
+    created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}"
     case cs.errors do
       [] -> Repo.insert(cs)
+            |> notify_bldg_created("bldg_created", created_bldg_ids)
       _ ->
         IO.inspect(cs.errors)
         raise "Failed to prepare bldg for writing to database"
@@ -99,9 +236,23 @@ defmodule BldgServer.Buildings do
 
   """
   def update_bldg(%Bldg{} = bldg, attrs) do
-    bldg
-    |> Bldg.changeset(attrs)
-    |> Repo.update()
+    IO.puts("~~~~ updating bldg #{bldg.name} with attrs: #{inspect(attrs)}")
+
+    # TODO figure out better way to notify bldg_url & address
+    updated_bldg_url = attrs["bldg_url"]
+    updated_bldg_address = attrs["address"]
+    updated_bldg_ids = "#{updated_bldg_url}|#{updated_bldg_address}"
+    if Map.has_key?(attrs, :previous_messages) do
+      # don't notify on chat updates
+      bldg
+      |> Bldg.changeset(attrs)
+      |> Repo.update()
+    else
+      bldg
+      |> Bldg.changeset(attrs)
+      |> Repo.update()
+      |> notify_bldg_updated("bldg_updated", updated_bldg_ids, attrs)
+    end
   end
 
   @doc """
@@ -133,13 +284,27 @@ defmodule BldgServer.Buildings do
     Bldg.changeset(bldg, %{})
   end
 
+  # This didn't work - update wasn't really applied
+  # def update_containers({:ok, %Bldg{} = bldg}) do
+  #   # Update the updated_at field of all containers of
+  #   # the given bldg
+  #   IO.puts("~~~~ updating containers called for bldg: #{bldg.name}")
+  #   container_addr = get_container(bldg.flr)
+  #   IO.puts("~~~~ the container_addr of #{bldg.name} is: #{inspect(container_addr)}")
+  #   if container_addr != "" do
+  #     get_bldg!(container_addr)
+  #     |> update_bldg(%{"updated_at" => DateTime.utc_now()})
+  #     |> update_containers() #  continue recursively to next container
+  #   end
+  # end
+
 
   # UTILS
 
   def extract_coords(addr) do
     # get the coords from the last part of the address: "g/b(17,24)/l0/b(-11,6)" -> ["-11","6]
     [x_s, y_s] = addr
-    |> String.split(address_delimiter)
+    |> String.split(address_delimiter())
     |> List.last()
     |> String.slice(2..-2)
     |> String.split(",")
@@ -150,10 +315,14 @@ defmodule BldgServer.Buildings do
   def extract_flr_level(flr) do
     l_s = case flr do
       "g" -> "0"
-      _ -> flr |> String.split(address_delimiter) |> List.last() |> String.slice(1..-1)
+      _ -> flr |> String.split(address_delimiter()) |> List.last() |> String.slice(1..-1)
     end
     {level, ""} = Integer.parse(l_s)
     level
+  end
+
+  def extract_name(bldg_url) do
+    bldg_url |> String.split(address_delimiter()) |> List.last()
   end
 
   def move_from_speaker({x, y}, offset) do
@@ -163,11 +332,11 @@ defmodule BldgServer.Buildings do
 
   def get_container(addr) do
     addr
-    |> String.split(address_delimiter)
+    |> String.split(address_delimiter())
     |> Enum.reverse()
     |> tl()
     |> Enum.reverse()
-    |> Enum.join(address_delimiter)
+    |> Enum.join(address_delimiter())
   end
 
   def get_container_flr(addr) do
@@ -218,11 +387,11 @@ defmodule BldgServer.Buildings do
         %{"container_web_url" => container} = entity
         entity_bldg = Buildings.get_by_web_url(container)
         # TODO handle the case the container bldg doesn't exist
-        {"#{entity_bldg.address}#{Buildings.address_delimiter}l0", "#{entity_bldg.bldg_url}#{Buildings.address_delimiter}l0", 0}
+        {"#{entity_bldg.address}#{address_delimiter()}l0", "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
       Map.has_key?(entity, "container_bldg_url") ->
         %{"container_bldg_url" => container} = entity
         entity_bldg = Buildings.get_by_bldg_url(container)
-        {"#{entity_bldg.address}#{Buildings.address_delimiter}l0", "#{entity_bldg.bldg_url}#{Buildings.address_delimiter}l0", 0}
+        {"#{entity_bldg.address}#{address_delimiter()}l0", "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
       Map.has_key?(entity, "flr") and Map.has_key?(entity, "flr_url") ->
         level = extract_flr_level(Map.get(entity, "flr"))
         {Map.get(entity, "flr"), Map.get(entity, "flr_url"), level}
@@ -238,7 +407,7 @@ defmodule BldgServer.Buildings do
       Map.has_key?(entity, "bldg_url") ->
         Map.get(entity, "bldg_url")
       Map.has_key?(entity, "flr_url") and Map.has_key?(entity, "name") ->
-        "#{Map.get(entity, "flr_url")}#{address_delimiter}#{Map.get(entity, "name")}"
+        "#{Map.get(entity, "flr_url")}#{address_delimiter()}#{Map.get(entity, "name")}"
       true ->
         "g"
     end
@@ -319,13 +488,55 @@ Given an entity:
 
   def calculate_nesting_depth(entity) do
     num_slashes = Map.get(entity, "address")
-    |> String.split(address_delimiter)
+    |> String.split(address_delimiter())
     |> Enum.drop(1) |> length()
     depth = case num_slashes do
       0 -> 0
-      _ -> trunc((num_slashes + 1) / 2)
+      _ -> trunc(num_slashes / 2)
     end
     Map.put(entity, "nesting_depth", depth)
+  end
+
+  # TODO get this from config
+
+  def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"1.11\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "stage"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.03\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "milestone"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"0.63\", \"flr0_height\": \"0.0\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "sales"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"3.0\", \"flr0_height\": \"1.3\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "team"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.05\"}")
+  end
+
+  def add_composite_bldg_metadata(%{"entity_type" => "costs"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"2.7\", \"flr0_height\": \"0.05\"}")
+  end
+
+  def add_composite_bldg_metadata(entity) do
+    Map.put(entity, "is_composite", false)
   end
 
 
@@ -365,6 +576,7 @@ Given an entity:
     |> figure_out_bldg_url()
     |> decide_on_location()
     |> calculate_nesting_depth()
+    |> add_composite_bldg_metadata()
     |> remove_build_params()
   end
 
@@ -388,7 +600,10 @@ Given an entity:
     |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
     |> JSON.encode()
 
-    new_prev_messages = append_message_to_list(bldg.previous_messages, text)
+    prev_messages = Utils.limit_list_to(bldg.previous_messages, 10)
+    IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
+
+    new_prev_messages = append_message_to_list(prev_messages, text)
     changes = %{previous_messages: new_prev_messages}
     result = update_bldg(bldg, changes)
 

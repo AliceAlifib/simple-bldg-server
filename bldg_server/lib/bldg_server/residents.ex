@@ -10,6 +10,7 @@ defmodule BldgServer.Residents do
   alias BldgServer.ResidentsAuth
   alias BldgServer.Buildings
 
+  require Logger
 
   # alias BldgServerWeb.Router.Helpers, as: Routes
 
@@ -186,23 +187,46 @@ defmodule BldgServer.Residents do
     update_resident(resident, changes)
   end
 
-  def enter_bldg(%Resident{} = resident, address, bldg_url) do
-    {initial_x, initial_y} = {8, 40}  # TODO read from config, per bldg type
-    changes = %{flr: "#{address}/l0", flr_url: "#{bldg_url}/l0", location: "#{address}/l0/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y}
+  def calculate_nesting_depth_from_address(address) do
+    num_slashes = address
+    |> String.split(Buildings.address_delimiter)
+    |> Enum.drop(1) |> length()
+    case num_slashes do
+      0 -> 0
+      _ -> trunc((num_slashes + 1) / 2)
+    end
+  end
+
+  def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level, post_enter_x, post_enter_y) do
+    {initial_x, initial_y} = {post_enter_x, post_enter_y}
+    nesting_depth = calculate_nesting_depth_from_address(address)
+    changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: nesting_depth}
     update_resident(resident, changes)
   end
 
-  def exit_bldg(%Resident{} = resident, address, bldg_url) do
+
+  def enter_bldg(%Resident{} = resident, address, bldg_url, post_enter_x, post_enter_y) do
+    enter_bldg_flr(resident, address, bldg_url, 0, post_enter_x, post_enter_y)
+  end
+
+  def enter_bldg(%Resident{} = resident, address, bldg_url) do
+    enter_bldg_flr(resident, address, bldg_url, 0, 0, 0)
+  end
+
+  def exit_bldg(%Resident{} = resident, address, bldg_url, post_exit_x, post_exit_y) do
     # get the container flr
     container_flr = Buildings.get_container_flr(address)
     container_flr_url = Buildings.get_container_flr_url(bldg_url)
 
-    # determine the location next to the door of the bldg exited
-    {x, y} = Buildings.extract_coords(address)
-    new_x = x
-    new_y = y + 6
+    # # determine the location next to the door of the bldg exited
+    # {x, y} = Buildings.extract_coords(address)
+    # new_x = x
+    # new_y = y + 2
+    new_x = post_exit_x
+    new_y = post_exit_y
+    nesting_depth = calculate_nesting_depth_from_address(container_flr)
 
-    changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y}
+    changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y, nesting_depth: nesting_depth}
     update_resident(resident, changes)
   end
 
@@ -221,13 +245,15 @@ defmodule BldgServer.Residents do
 
   def is_command(msg_text), do: String.at(msg_text, 0) == "/"
 
-
   def say(%Resident{} = resident, msg) do
     {_, text} = msg
     |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
     |> JSON.encode()
 
-    new_prev_messages = append_message_to_list(resident.previous_messages, text)
+    prev_messages = Utils.limit_list_to(resident.previous_messages, 10)
+    IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
+
+    new_prev_messages = append_message_to_list(prev_messages, text)
     changes = %{previous_messages: new_prev_messages}
     result = update_resident(resident, changes)
 

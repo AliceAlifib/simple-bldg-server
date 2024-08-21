@@ -1,32 +1,33 @@
-version: '3.1'
+version: "3.2"
 
 services:
-
-  database:
+  db:
     image: postgres
     restart: always
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: bldg_server_prod
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes: 
-      - db_data:/var/lib/postgresql/data
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   web:
-    image: bldg-server
-    restart: always
+    image: dibaunaumh/bldg-server:v068
+    volumes:
+      - type: bind
+        source: .
+        target: /app
     ports:
-      - ${APP_PORT}:${APP_PORT}
-    environment:
-      APP_HOSTNAME: ${APP_HOSTNAME}
-      APP_PORT: ${APP_PORT}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_HOST: ${DB_HOST}
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      - "4000:4000"
+      - "4443:4443"
+    env_file: docker.env
     depends_on:
-      - database
-
-volumes:
-  db_data:
+      db:
+          condition: service_healthy
+    # command:
+    #   - ./run.sh

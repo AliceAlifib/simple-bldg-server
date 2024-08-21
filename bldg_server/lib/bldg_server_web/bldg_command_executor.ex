@@ -114,11 +114,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         else
           # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-          {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+          {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+          flr = msg["say_flr"]
+          updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
           entity = %{
-            "flr" => msg["say_flr"],
+            "flr" => flr,
             "flr_url" => msg["say_flr_url"],
-            "address" => msg["say_location"],
+            "address" => updated_location,
             "x" => x,
             "y" => y,
             "name" => name,
@@ -143,11 +145,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "web_url" => website,
@@ -173,14 +177,48 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "name" =>  name,
+          "entity_type" =>  entity_type,
+          "summary" =>  Enum.join(summary_tokens, " "),
+          "state" =>  "approved",
+          "owners" => [msg["resident_email"]]
+        }
+        Buildings.build(entity)
+        |> Buildings.create_bldg()
+      end
+    end
+
+    # create bldg with: name & summary
+    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "category", category, "and", "summary" | summary_tokens], msg) do
+      # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
+
+      # validate that the actor resident/bldg has the sufficient permissions
+      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
+      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
+      else
+        # TODO if creating under a given bldg, send its container_web_url instead of flr
+
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
+        entity = %{
+          "flr" => flr,
+          "flr_url" => msg["say_flr_url"],
+          "address" => updated_location,
+          "x" => x,
+          "y" => y,
+          "name" =>  name,
+          "category" => category,
           "entity_type" =>  entity_type,
           "summary" =>  Enum.join(summary_tokens, " "),
           "state" =>  "approved",
@@ -202,11 +240,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "web_url" => website,
@@ -233,11 +273,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "name" => name,
@@ -263,11 +305,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "name" => name,
@@ -292,11 +336,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "web_url" => website,
@@ -322,11 +368,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-10)
+        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
+        flr = msg["say_flr"]
+        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
         entity = %{
-          "flr" => msg["say_flr"],
+          "flr" => flr,
           "flr_url" => msg["say_flr_url"],
-          "address" => msg["say_location"],
+          "address" => updated_location,
           "x" => x,
           "y" => y,
           "web_url" => website,
@@ -344,8 +392,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
     # move bldg
     def execute_command(["/move", "bldg", name, "here"], msg) do
-      # update the location of the bldg with the given website to the say location
-      # TODO validate that the actor resident/bldg has the sufficient permissions
+      # update the location of the bldg with the given name to the say location
       # TODO composite bldgs should update the location of their children bldgs as well
       {x, y} = Buildings.extract_coords(msg["say_location"])
       flr_url = msg["say_flr_url"]
@@ -356,6 +403,45 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         raise "Unauthorized"
       else
         Buildings.update_bldg(bldg, %{"address" => msg["say_location"], "x" => x, "y" => y})
+      end
+    end
+
+
+    # relocate bldg
+    def execute_command(["/relocate", "bldg", bldg_url, "here"], msg) do
+      # update the bldg_url & address of the bldg with the given bldg_url to the say location
+      # TODO composite bldgs should update the location of their children bldgs as well
+      # TODO handle location collisions
+      {x, y} = Buildings.extract_coords(msg["say_location"])
+      name = Buildings.extract_name(bldg_url)
+      flr_url = msg["say_flr_url"]
+      new_bldg_url = "#{flr_url}#{Buildings.address_delimiter}#{name}"
+      bldg = Buildings.get_by_bldg_url(bldg_url)
+      container_bldg_url = Buildings.get_container(flr_url)
+      container_bldg = Buildings.get_by_bldg_url(container_bldg_url)
+      case {bldg,  container_bldg} do
+        {nil, _} ->
+          IO.puts("Bldg given to relocate couldn't be found: #{bldg_url}")
+        {_, nil} ->
+          IO.puts("Container of bldg given to relocate couldn't be found: #{container_bldg_url}")
+        _ ->
+          attrs = %{
+            "bldg_url" => new_bldg_url,
+            "address" => msg["say_location"],
+            "x" => x,
+            "y" => y,
+            "flr" => msg["say_flr"],
+            "flr_url" => flr_url,
+            "nesting_depth" => container_bldg.nesting_depth + 1,
+            "flr_level" => Buildings.extract_flr_level(msg["say_flr"])
+          }
+          # verify that the speaker is also an owner
+          if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+            raise "Unauthorized"
+          else
+            # TODO address may not be exactly the say_location
+            Buildings.update_bldg(bldg, attrs)
+          end
       end
     end
 
@@ -411,6 +497,10 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         end
     end
 
+    def execute_command(msg_parts, _msg) do
+      Logger.info("Ignoring unknown command:")
+      IO.inspect(msg_parts)
+    end
 
     #def handle_info({sender, message, flr}, state) do
     def handle_info(%{event: "new_message", payload: new_message}, state) do
