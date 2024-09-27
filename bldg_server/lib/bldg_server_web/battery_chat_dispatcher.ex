@@ -36,18 +36,16 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
   #def handle_info({sender, message, flr}, state) do
   def handle_info(%{event: "new_message", payload: new_message}, state) do
     #Logger.info("chat message received at #{flr} from #{sender}: #{message}")
-    IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received:")
+    flr = new_message["say_flr"]
+    IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received at #{flr}:")
     IO.inspect(new_message)
 
     # query for all batteries inside that message flr
     # & invoke the callback url per each battery, with the message details in the body
 
-    batteries = new_message["say_flr"]
+    batteries = flr
     |> Batteries.get_batteries_in_floor()
-
-    IO.inspect(batteries)
-
-    Enum.map(batteries, fn b -> send_message_to_battery(b.callback_url, new_message) end)
+    |> Enum.map(fn b -> send_message_to_battery(b.callback_url, new_message) end)
 
     {:noreply, state}
   end
