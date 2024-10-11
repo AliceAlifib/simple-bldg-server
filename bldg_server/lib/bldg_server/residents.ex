@@ -200,8 +200,14 @@ defmodule BldgServer.Residents do
   def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level, post_enter_x, post_enter_y) do
     {initial_x, initial_y} = {post_enter_x, post_enter_y}
     nesting_depth = calculate_nesting_depth_from_address(address)
-    changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: nesting_depth}
-    update_resident(resident, changes)
+    case address do
+      "g" ->
+        changes = %{flr: "#{address}", flr_url: "#{bldg_url}", location: "#{address}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: 0}
+        update_resident(resident, changes)
+      _ ->
+        changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: nesting_depth}
+        update_resident(resident, changes)
+    end
   end
 
 
