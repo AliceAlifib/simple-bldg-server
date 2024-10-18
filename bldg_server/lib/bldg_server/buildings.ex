@@ -98,7 +98,7 @@ defmodule BldgServer.Buildings do
     # notification parameters
     # extract location from subject
     IO.puts("~~~~~ at notify_bldg_created - FAILURE: #{subject}")
-    [bldg_url, address] = String.split(subject, "|")
+    [bldg_url, address, web_url] = String.split(subject, "|")
     container_flr = get_container_flr(address)
     IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr: #{inspect(container_flr)}")
     container_flr_url = get_container(bldg_url)
@@ -213,7 +213,8 @@ defmodule BldgServer.Buildings do
     # TODO figure out better way to notify bldg_url & address
     created_bldg_url = attrs["bldg_url"]
     created_bldg_address = attrs["address"]
-    created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}"
+    created_bldg_web_url = attrs["web_url"] # the "natural key" of the entity
+    created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}|#{created_bldg_web_url}"
     case cs.errors do
       [] -> Repo.insert(cs)
             |> notify_bldg_created("bldg_created", created_bldg_ids)
@@ -241,7 +242,8 @@ defmodule BldgServer.Buildings do
     # TODO figure out better way to notify bldg_url & address
     updated_bldg_url = attrs["bldg_url"]
     updated_bldg_address = attrs["address"]
-    updated_bldg_ids = "#{updated_bldg_url}|#{updated_bldg_address}"
+    updated_bldg_web_url = attrs["web_url"] # the "natural key" of the entity
+    updated_bldg_ids = "#{updated_bldg_url}|#{updated_bldg_address}|#{updated_bldg_web_url}"
     if Map.has_key?(attrs, :previous_messages) do
       # don't notify on chat updates
       bldg
