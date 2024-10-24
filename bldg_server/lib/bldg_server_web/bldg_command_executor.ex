@@ -267,7 +267,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     # create bldg with: name, website & summary
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "summary" | summary_tokens], msg) do
       # create a bldg with the given entity-type, name, website & summary, inside the given flr & bldg
-
+      Logger.info("~~~~~~~~~~~~ [bldg command executor] creating bldg with name: #{name}, website: #{website}, summary: #{Enum.join(summary_tokens, " ")}")
       # validate that the actor resident/bldg has the sufficient permissions
       container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
       if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do

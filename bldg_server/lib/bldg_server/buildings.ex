@@ -219,7 +219,7 @@ defmodule BldgServer.Buildings do
       [] -> Repo.insert(cs)
             |> notify_bldg_created("bldg_created", created_bldg_ids)
       _ ->
-        IO.inspect(cs.errors)
+        Logger.error("Failed to prepare bldg for writing to database: #{inspect(cs.errors)}")
         raise "Failed to prepare bldg for writing to database"
     end
   end
