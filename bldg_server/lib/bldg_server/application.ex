@@ -17,7 +17,14 @@ defmodule BldgServer.Application do
       BldgServerWeb.BldgCommandExecutor,
       BldgServerWeb.BatteryChatDispatcher,
       # Start the http client
-      {Finch, name: FinchClient}
+      {Finch, name: FinchClient},
+      # Start the redis connection
+      {Redix, [
+        host: System.get_env("REDIS_HOST"),
+        #password: System.get_env("REDIS_PASSWORD"),
+        port: String.to_integer(System.get_env("REDIS_PORT") || "6379"),
+        name: :redix
+      ]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

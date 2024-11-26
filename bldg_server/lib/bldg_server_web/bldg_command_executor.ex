@@ -122,8 +122,16 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           if protocol == :http do
             raise "HTTP protocol is not implemented yet for data_url (#{data_url})"
           end
-          {:ok, data} = Redix.command(:redix, ["GET", data_url])
-          data
+          # protocol is :redis
+          redis_key = String.replace_prefix(data_url, "redis://", "")
+          case Redix.command(:redix, ["GET", redis_key]) do
+            {:ok, data} ->
+              Logger.info("Successfully read data from redis_key #{redis_key}: (#{data})")
+              data
+            {:error, %Redix.ConnectionError{reason: error_reason}} ->
+              Logger.error("Failed to read data from Redis: #{error_reason}")
+              error_reason
+          end
       end
     end
 
