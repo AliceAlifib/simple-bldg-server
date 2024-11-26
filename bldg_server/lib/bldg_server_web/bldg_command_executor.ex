@@ -68,6 +68,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       end
     end
 
+
     # create road between 2 bldgs (using their websites)
     # TODO handle the case where there are multiple bldgs for the same website - check the ones owned by the user in order to resolve
     def execute_command(["/connect", "between", name1, "and", name2], msg) do
@@ -103,39 +104,38 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         end
     end
 
-    # create bldg with: name
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name], msg) do
-        # create a bldg with the given entity-type & name, inside the given flr & bldg
+    def fetch_data(data_url) do
+      case data_url do
+        "" -> ""
+        _ ->
+          # Check if data_url starts with redis:// or http://
+          protocol = cond do
+            String.starts_with?(data_url, "redis://") -> :redis
+            String.starts_with?(data_url, "http://") -> :http
+            String.starts_with?(data_url, "https://") -> :http
+            true -> :unknown
+          end
 
-        # validate that the actor resident/bldg has the sufficient permissions
-        container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-        if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-          raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-        else
-          # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-          {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-          flr = msg["say_flr"]
-          updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-          entity = %{
-            "flr" => flr,
-            "flr_url" => msg["say_flr_url"],
-            "address" => updated_location,
-            "x" => x,
-            "y" => y,
-            "name" => name,
-            "entity_type" => entity_type,
-            "state" =>  "approved",
-            "owners" => [msg["resident_email"]]
-          }
-          Buildings.build(entity)
-          |> Buildings.create_bldg()
-        end
+          if protocol == :unknown do
+            raise "Unknown protocol in data_url: #{data_url}"
+          end
+          if protocol == :http do
+            raise "HTTP protocol is not implemented yet for data_url (#{data_url})"
+          end
+          # protocol is :redis
+          redis_key = String.replace_prefix(data_url, "redis://", "")
+          case Redix.command(:redix, ["GET", redis_key]) do
+            {:ok, data} ->
+              Logger.info("Successfully read data from redis_key #{redis_key}: (#{data})")
+              data
+            {:error, %Redix.ConnectionError{reason: error_reason}} ->
+              Logger.error("Failed to read data from Redis: #{error_reason}")
+              error_reason
+          end
+      end
     end
 
-
-    # create bldg with: name & website
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website], msg) do
+    def create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg) do
       # create a bldg with the given entity-type & name, inside the given flr & bldg
 
       # validate that the actor resident/bldg has the sufficient permissions
@@ -145,6 +145,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         # TODO if creating under a given bldg, send its container_web_url instead of flr
 
+        data = fetch_data(data_url)
+
         {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
         flr = msg["say_flr"]
         updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
@@ -154,240 +156,131 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           "address" => updated_location,
           "x" => x,
           "y" => y,
-          "web_url" => website,
           "name" => name,
           "entity_type" => entity_type,
+          "web_url" => website,
+          "summary" => summary,
+          "category" => category,
+          "picture_url" => picture_url,
+          "data" => data,
           "state" =>  "approved",
           "owners" => [msg["resident_email"]]
         }
         Buildings.build(entity)
         |> Buildings.create_bldg()
       end
+    end
+
+
+    # create bldg with: name
+    def execute_command(["/create", entity_type, "bldg", "with", "name", name], msg) do
+      website = ""
+      summary = ""
+      category = ""
+      picture_url = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
+    end
+
+
+    # create bldg with: name & website
+    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website], msg) do
+      # create a bldg with the given entity-type & name, inside the given flr & bldg
+      summary = ""
+      category = ""
+      picture_url = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
     end
 
 
     # create bldg with: name & summary
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "summary" | summary_tokens], msg) do
       # create a bldg with the given entity-type, name & summary, inside the given flr & bldg
-
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "name" =>  name,
-          "entity_type" =>  entity_type,
-          "summary" =>  Enum.join(summary_tokens, " "),
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+      website = ""
+      category = ""
+      picture_url = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
     end
 
-    # create bldg with: name & summary
+    # create bldg with: name, category & summary
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "category", category, "and", "summary" | summary_tokens], msg) do
       # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
-
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "name" =>  name,
-          "category" => category,
-          "entity_type" =>  entity_type,
-          "summary" =>  Enum.join(summary_tokens, " "),
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+      website = ""
+      picture_url = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
     end
+
+    # create bldg with: name, website, category & summary
+    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "category", category, "and", "summary" | summary_tokens], msg) do
+      # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
+      picture_url = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
+    end
+
+    # create bldg with: name, website, category, data_url & summary
+    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "category", category, "and", "data_url", data_url, "and", "summary" | summary_tokens], msg) do
+    # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
+      picture_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
+    end
+
 
     # create bldg with: name, website & summary
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "summary" | summary_tokens], msg) do
       # create a bldg with the given entity-type, name, website & summary, inside the given flr & bldg
+      category = ""
+      picture_url = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
+    end
 
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "web_url" => website,
-          "name" =>  name,
-          "entity_type" =>  entity_type,
-          "summary" =>  Enum.join(summary_tokens, " "),
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+    # create bldg with: name, website, data_url & summary
+    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "data_url", data_url, "and", "summary" | summary_tokens], msg) do
+      # create a bldg with the given entity-type, name, website, data_url & summary, inside the given flr & bldg
+      category = ""
+      picture_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
     end
 
 
     # create bldg with: name, picture & summary
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "picture", picture_url, "and", "summary" | summary_tokens], msg) do
       # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "name" => name,
-          "entity_type" => entity_type,
-          "picture_url" => picture_url,
-          "summary" =>  Enum.join(summary_tokens, " "),
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+      website = ""
+      category = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
     end
 
     # create bldg with: name, picture
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "picture", picture_url], msg) do
       # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "name" => name,
-          "entity_type" => entity_type,
-          "picture_url" => picture_url,
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+      website = ""
+      category = ""
+      summary = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
     end
 
     # create bldg with: name, website & picture
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "picture", picture_url], msg) do
       # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "web_url" => website,
-          "name" => name,
-          "entity_type" => entity_type,
-          "picture_url" => picture_url,
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+      category = ""
+      summary = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
     end
 
     # create bldg with: name, website, picture & summary
     def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "picture", picture_url, "and", "summary" | summary_tokens], msg) do
       # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-
-      # validate that the actor resident/bldg has the sufficient permissions
-      container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
-      if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
-        raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
-      else
-        # TODO if creating under a given bldg, send its container_web_url instead of flr
-
-        {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-        flr = msg["say_flr"]
-        updated_location = "#{flr}#{Buildings.address_delimiter}b(#{x},#{y})"
-        entity = %{
-          "flr" => flr,
-          "flr_url" => msg["say_flr_url"],
-          "address" => updated_location,
-          "x" => x,
-          "y" => y,
-          "web_url" => website,
-          "name" => name,
-          "entity_type" => entity_type,
-          "picture_url" => picture_url,
-          "summary" =>  Enum.join(summary_tokens, " "),
-          "state" =>  "approved",
-          "owners" => [msg["resident_email"]]
-        }
-        Buildings.build(entity)
-        |> Buildings.create_bldg()
-      end
+      category = ""
+      data_url = ""
+      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
     end
 
     # move bldg
