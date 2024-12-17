@@ -63,9 +63,10 @@ defmodule BldgServer.Buildings do
     Repo.all(q)
   end
 
-  def notify_bldg_created({:error, %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url}}, action, subject) do
+  def notify_bldg_created({:error, %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url}}, action, subject, triggering_chat_msg) do
+
     # recursive call, no need to extract location from subject
-    IO.puts("Recursive call to notify on bldg-creation-failure")
+    IO.puts("Recursive call to notify on bldg-creation-failure: #{:error}")
     action = "failed_to_create_bldg"
     container_addr = get_container(container_flr)
 
@@ -87,13 +88,47 @@ defmodule BldgServer.Buildings do
       }
       say(container, msg)
       # recurse to parent container
-      notify_bldg_created({:error, container}, action, subject)
+      notify_bldg_created({:error, container}, action, subject, triggering_chat_msg)
     end
 
   end
 
 
-  def notify_bldg_created({:error, error_description}, action, subject) do
+  def notify_bldg_created({:error, error_description}, action, subject, triggering_chat_msg) do
+    # errors: [address: {"has already been taken", [constraint: :unique, constraint_name: "bldgs_address_index"]}], data: #BldgServer.Buildings.Bldg<>, valid?: false>
+    # Check if error is due to address constraint violation
+    is_address_constraint = case error_description do
+      %{errors: errors} ->
+        Enum.any?(errors, fn {field, {_msg, details}} ->
+          field == :address &&
+          Keyword.get(details, :constraint) == :unique &&
+          Keyword.get(details, :constraint_name) == "bldgs_address_index"
+        end)
+      _ -> false
+    end
+
+    if is_address_constraint do
+      IO.puts("~~~~~ Error: Address constraint violation detected, retrying create command")
+      # let's retry this chat command - up to 10 times - by broadcasting the message again
+      # Extract and modify coordinates for retry
+      case triggering_chat_msg do
+        %{"say_location" => location} = msg when is_binary(location) ->
+          {x, y} = extract_coords(location)
+          # Try moving the location slightly to avoid collision
+          new_x = x + :rand.uniform(3) - 1 # Shift by -1, 0, or 1
+          new_y = y + :rand.uniform(3) - 1 # Shift by -1, 0, or 1
+          new_location = String.replace(location, "b(#{x},#{y})", "b(#{new_x},#{new_y})")
+          new_msg = Map.put(msg, "say_location", new_location)
+          IO.puts("~~~~~ Retrying with new location: #{new_location} (moved from #{location})")
+          BldgServerWeb.Endpoint.broadcast!(
+            "chat",
+            "new_message",
+            new_msg
+          )
+        msg -> msg # Return unchanged if no location or wrong format
+      end
+    end
+
     IO.puts("~~~~~ 1st call to notify on bldg creation error: #{inspect(error_description)}")
     # notification parameters
     # extract location from subject
@@ -124,13 +159,13 @@ defmodule BldgServer.Buildings do
       }
       say(container, msg)
       # recurse to parent container
-      notify_bldg_created({:error, container}, action, subject)
+      notify_bldg_created({:error, container}, action, subject, triggering_chat_msg)
     end
 
   end
 
 
-  def notify_bldg_created({:ok, created_bldg}, action, subject) do
+  def notify_bldg_created({:ok, created_bldg}, action, subject, triggering_chat_msg) do
     # notification parameters
     %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
     IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
@@ -154,7 +189,7 @@ defmodule BldgServer.Buildings do
       }
       say(container, msg)
       # recurse to parent container
-      notify_bldg_created({:ok, container}, action, subject)
+      notify_bldg_created({:ok, container}, action, subject, triggering_chat_msg)
     end
   end
 
@@ -207,7 +242,7 @@ defmodule BldgServer.Buildings do
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_bldg(attrs \\ %{}) do
+  def create_bldg(attrs \\ %{}, triggering_chat_msg) do
     cs = %Bldg{}
     |> Bldg.changeset(attrs)
     # TODO figure out better way to notify bldg_url & address
@@ -217,7 +252,7 @@ defmodule BldgServer.Buildings do
     created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}|#{created_bldg_web_url}"
     case cs.errors do
       [] -> Repo.insert(cs)
-            |> notify_bldg_created("bldg_created", created_bldg_ids)
+            |> notify_bldg_created("bldg_created", created_bldg_ids, triggering_chat_msg)
       _ ->
         Logger.error("Failed to prepare bldg for writing to database: #{inspect(cs.errors)}")
         raise "Failed to prepare bldg for writing to database"
