@@ -167,7 +167,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           "owners" => [msg["resident_email"]]
         }
         Buildings.build(entity)
-        |> Buildings.create_bldg()
+        |> Buildings.create_bldg(msg)
       end
     end
 
