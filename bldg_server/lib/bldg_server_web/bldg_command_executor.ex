@@ -135,7 +135,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       end
     end
 
-    def create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg) do
+    def create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, state, msg) do
       # create a bldg with the given entity-type & name, inside the given flr & bldg
 
       # validate that the actor resident/bldg has the sufficient permissions
@@ -163,7 +163,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           "category" => category,
           "picture_url" => picture_url,
           "data" => data,
-          "state" =>  "approved",
+          "state" =>  state,
           "owners" => [msg["resident_email"]]
         }
         Buildings.build(entity)
@@ -171,132 +171,58 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       end
     end
 
+    def execute_command(["/create", entity_type, "bldg", "with" | parameters_tokens], msg) do
+    # Initialize variables
+    name = ""
+    website = ""
+    summary = ""
+    category = ""
+    picture_url = ""
+    data_url = ""
+    state = ""
 
-    # create bldg with: name
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name], msg) do
-      website = ""
-      summary = ""
-      category = ""
-      picture_url = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
+    # Loop through parameters with index
+    Enum.with_index(parameters_tokens)
+    |> Enum.reduce({name, website, summary, category, picture_url, data_url, state}, fn
+      {"name", i}, acc ->
+        name = Enum.at(parameters_tokens, i + 1)
+        acc = put_elem(acc, 0, name)
+        acc
+      {"website", i}, acc ->
+        website = Enum.at(parameters_tokens, i + 1)
+        acc = put_elem(acc, 1, website)
+        acc
+      {"summary", i}, acc ->
+        # Get all tokens after summary until next parameter or end
+        summary_tokens = parameters_tokens
+          |> Enum.drop(i + 1)
+          |> Enum.take_while(fn x -> not Enum.member?(["name", "website", "category", "picture_url", "data_url", "state"], x) end)
+        summary = Enum.join(summary_tokens, " ")
+        acc = put_elem(acc, 2, summary)
+        acc
+      {"category", i}, acc ->
+        category = Enum.at(parameters_tokens, i + 1)
+        acc = put_elem(acc, 3, category)
+        acc
+      {"picture_url", i}, acc ->
+        picture_url = Enum.at(parameters_tokens, i + 1)
+        acc = put_elem(acc, 4, picture_url)
+        acc
+      {"data_url", i}, acc ->
+        data_url = Enum.at(parameters_tokens, i + 1)
+        acc = put_elem(acc, 5, data_url)
+        acc
+      {"state", i}, acc ->
+        state = Enum.at(parameters_tokens, i + 1)
+        acc = put_elem(acc, 6, state)
+        acc
+      _, acc -> acc
+    end)
+    |> then(fn {name, website, summary, category, picture_url, data_url, state} ->
+      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, state, msg)
+    end)
     end
 
-
-    # create bldg with: name & website
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website], msg) do
-      # create a bldg with the given entity-type & name, inside the given flr & bldg
-      summary = ""
-      category = ""
-      picture_url = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
-    end
-
-
-    # create bldg with: name & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name & summary, inside the given flr & bldg
-      website = ""
-      category = ""
-      picture_url = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, data_url & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "data_url", data_url, "and", "summary" | summary_tokens], msg) do
-      website = ""
-      picture_url = ""
-      category = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, category & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "category", category, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
-      website = ""
-      picture_url = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, category, data_url & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "category", category, "and", "data_url", data_url, "and", "summary" | summary_tokens], msg) do
-      website = ""
-      picture_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, website, category & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "category", category, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
-      picture_url = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, website, category, data_url & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "category", category, "and", "data_url", data_url, "and", "summary" | summary_tokens], msg) do
-    # create a bldg with the given entity-type, name, category & summary, inside the given flr & bldg
-      picture_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-
-    # create bldg with: name, website & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name, website & summary, inside the given flr & bldg
-      category = ""
-      picture_url = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, website, data_url & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "data_url", data_url, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name, website, data_url & summary, inside the given flr & bldg
-      category = ""
-      picture_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-
-    # create bldg with: name, picture & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "picture", picture_url, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-      website = ""
-      category = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, picture
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "picture", picture_url], msg) do
-      # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-      website = ""
-      category = ""
-      summary = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, website & picture
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "picture", picture_url], msg) do
-      # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-      category = ""
-      summary = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, summary, category, picture_url, data_url, msg)
-    end
-
-    # create bldg with: name, website, picture & summary
-    def execute_command(["/create", entity_type, "bldg", "with", "name", name, "and", "website", website, "and", "picture", picture_url, "and", "summary" | summary_tokens], msg) do
-      # create a bldg with the given entity-type, name, website & picture url, inside the given flr & bldg
-      category = ""
-      data_url = ""
-      create_bldg_from_command(entity_type, name, website, Enum.join(summary_tokens, " "), category, picture_url, data_url, msg)
-    end
 
     # move bldg
     def execute_command(["/move", "bldg", name, "here"], msg) do
