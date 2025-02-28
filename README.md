@@ -1,14 +1,7 @@
-W2M is a protocol for presenting & interacting with information in a 3D organized space. Our  assumption is that a 3D organized space can significantly increase the ability to discover & locate information, compared to the regular page-based way we present & interact with information today.
+## Alice-In is a visual language for seeing data
 
-### Why
-There’s a very big difference between an e-commerce website or app & a physical store, selling the same products.
-In the website or app, you enter & see a few featured products, so you need to search, browse categories & scroll until you find the items you’re interested in.
+People use apps to manage & consume data. Normally there's a database behind apps with tables and data. People use the apps to consume this data. However, the UI used by apps today uses textual representation, meaning apps use text to convey data. If the app has thousands of data items, it will represent those items in rows in a table or boxes with text. The main problem with textual representation is number of items a user can consume per minute is very low, leading to inability to consume a lot of data, & therefore inability to discover valuable data you weren't looking for. 
 
-In a physical store, you walk in & see all of the products organized in categories. If it’s large you need to walk in a bit more to see everything, but since you see everything, you not just find the items you’re interested in, but also discover interesting items you weren’t even looking for. When you visit the physical store multiple times, e.g., your supermarket, you remember where things are located, so you’re becoming really efficient in finding & discovering things that interest you.
-This inefficiency isn’t limited to e-commerce websites or apps, in fact, it applies to all websites & apps you’re using, be it your chat/email/social-media feed or inbox, or the apps you use to manage your work. They all just show you a list of features items, so you need to search, browse categories & scroll until you find items you’re interested in, but you can’t just walk in & see everything, so you’ll easily discover interesting items you weren’t even looking for.
+Alice-in is visual language for conveying the data in apps. It's a visual language meaning it allows people to see the data. When we talk about data visualization, we normally talk about data summary visualization - charts today only show a summary of the data across few dimensions. Alice-in tries to do full data visualization, meaning that you see all of your data with all of its dimensions, in a meaningful way.
 
-The problem is in the interface - the websites & apps we’re using have an interface that doesn’t allow users to see everything or walk around until they see everything. The W2M - standing for Web Wide Matrix - is a high-level UI framework, letting developers to easily create a 3D Organized Space interface, similar to the physical store, for any website or app. This practically solves the inherent inefficiency in existing interfaces, & allows users to be much more efficient in finding & discovering items of interest.
-
-
-### What
-The simple-bldg-server is a simple implementation of the the server managaing the storage & service of a branch in the W2M.
+To do that, we use Alice-in *embodies* data items in a way that reflects all of their dimensions & *embeds* items in a way that conveys their meaning. Here's a quick [demo using the Titanic dataset](https://www.youtube.com/watch?v=sUbdJN_OJpI).
