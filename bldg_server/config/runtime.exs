@@ -34,7 +34,9 @@ if config_env() == :prod do
     hostname: db_host,
     port: db_port,
     ssl: db_ssl,
-    pool_size: 10#,
+    pool_size: 20,
+    queue_target: 5000,
+    queue_interval: 10000
     #socket_options: [:inet6]
 
 end
