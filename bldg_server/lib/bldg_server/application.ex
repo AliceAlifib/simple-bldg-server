@@ -23,6 +23,7 @@ defmodule BldgServer.Application do
         host: System.get_env("REDIS_HOST"),
         #password: System.get_env("REDIS_PASSWORD"),
         port: String.to_integer(System.get_env("REDIS_PORT") || "6379"),
+        socket_opts: [:inet6],
         name: :redix
       ]}
     ]

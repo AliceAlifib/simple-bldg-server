@@ -24,6 +24,9 @@ kill_signal = 'SIGTERM'
   DB_PORT = '5433'
   DB_SSL = 'false'
   DB_USER = 'bldg_server'
+  REDIS_HOST = 'fly-alicein-redis.upstash.io'
+  REDIS_PORT = 6379
+  REDIS_PASSWORD = 'notapassword'
 
 
 [http_service]
