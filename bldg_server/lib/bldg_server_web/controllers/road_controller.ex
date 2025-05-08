@@ -48,4 +48,11 @@ defmodule BldgServerWeb.RoadController do
     render(conn, "look.json", roads: roads)
   end
 
+  def scan(conn, %{"flr" => flr}) do
+    # unescape the flr parameter
+    decoded_flr = URI.decode(flr)
+    roads = Relations.list_all_roads_in_flr(decoded_flr)
+    render(conn, "look.json", roads: roads)
+  end
+
 end

@@ -55,6 +55,13 @@ defmodule BldgServerWeb.BldgController do
     render(conn, "look.json", bldgs: [container | bldgs])
   end
 
+  def scan(conn, %{"flr" => flr}) do
+    decoded_flr = URI.decode(flr)
+    container_bldg_addr = Buildings.get_flr_bldg(decoded_flr)
+    container = Buildings.get_bldg!(container_bldg_addr)
+    bldgs = Buildings.list_all_bldgs_in_flr(decoded_flr)
+    render(conn, "look.json", bldgs: [container | bldgs])
+  end
 
   def build(conn, %{"entity" => entity}) do
     bldg = Buildings.build(entity)

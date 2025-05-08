@@ -34,6 +34,11 @@ defmodule BldgServer.Buildings do
     Repo.all(q)
   end
 
+  def list_all_bldgs_in_flr(flr) do
+    q = from b in Bldg,
+        where: like(b.flr, ^"#{flr}%")
+    Repo.all(q)
+  end
 
 
   @doc """
