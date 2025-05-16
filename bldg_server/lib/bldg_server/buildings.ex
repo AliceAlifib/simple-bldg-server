@@ -174,7 +174,7 @@ defmodule BldgServer.Buildings do
     # notification parameters
     %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
     IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
-    container_addr = get_container(container_flr)
+    container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
     if container_addr != "" do
       # TODO handle the case where the container is g
