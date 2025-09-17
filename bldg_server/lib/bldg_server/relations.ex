@@ -31,6 +31,18 @@ defmodule BldgServer.Relations do
     Repo.all(q)
   end
 
+    @doc """
+  Returns all roads (incliuding nested) inside a given flr.
+
+  Returns empty list if no such road exists.
+  """
+  def list_all_roads_in_flr(flr) do
+    q = from r in Road,
+        where: like(r.flr, ^"#{flr}%")
+    Repo.all(q)
+  end
+
+
   @doc """
   Gets a single road.
 

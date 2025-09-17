@@ -116,8 +116,14 @@ defmodule BldgServerWeb.ResidentController do
     render(conn, "look.json", residents: residents)
   end
 
-  # TODO bldgs can act as well - consolidate resident & bldg actions
+  def scan(conn, %{"flr" => flr}) do
+    # unescape the flr parameter
+    decoded_flr = URI.decode(flr)
+    residents = Residents.list_all_residents_in_flr(decoded_flr)
+    render(conn, "look.json", residents: residents)
+  end
 
+  # TODO bldgs can act as well - consolidate resident & bldg actions
 
   # MOVE action
   def act(conn, %{"resident_email" => email, "action_type" => "MOVE", "move_location" => location, "move_x" => x, "move_y" => y}) do

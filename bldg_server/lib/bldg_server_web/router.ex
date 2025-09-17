@@ -10,14 +10,17 @@ defmodule BldgServerWeb.Router do
 
     get "/bldgs/resolve_address", BldgController, :resolve_address
     get "/bldgs/look/:flr", BldgController, :look
+    get "/bldgs/scan/:flr", BldgController, :scan
     post "/bldgs/build", BldgController, :build
     post "/bldgs/:address/relocate_to/:new_address", BldgController, :relocate
     post "/residents/login", ResidentController, :login
     get "/residents/verify", ResidentController, :verify_email
     get "/residents/verification_status", ResidentController, :verification_status
     get "/residents/look/:flr", ResidentController, :look
+    get "/residents/scan/:flr", ResidentController, :scan
     post "/residents/act", ResidentController, :act
     get "/roads/look/:flr", RoadController, :look
+    get "/roads/scan/:flr", RoadController, :scan
     post "/batteries/attach", BatteryController, :attach
     post "/batteries/detach", BatteryController, :detach
     post "/batteries/act", BldgController, :act
