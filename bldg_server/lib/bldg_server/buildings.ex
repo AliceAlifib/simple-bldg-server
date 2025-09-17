@@ -208,8 +208,7 @@ defmodule BldgServer.Buildings do
     # notification parameters
     %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = updated_bldg
     IO.puts("~~~~~ at notify_bldg_updated #{action} - SUCCESS: #{name}")
-
-    container_addr = get_container(container_flr)
+    container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
     if container_addr != "" do
       # TODO handle the case where the container is g
@@ -592,7 +591,7 @@ Given an entity:
   def add_composite_bldg_metadata(%{"entity_type" => "costs"} = entity) do
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"2.7\", \"flr0_height\": \"0.05\"}")
+    |> Map.put("data", "{\"flr_height\": \"2.57\", \"flr0_height\": \"0.067\"}")
   end
 
   def add_composite_bldg_metadata(entity) do
