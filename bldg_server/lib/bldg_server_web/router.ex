@@ -24,6 +24,7 @@ defmodule BldgServerWeb.Router do
     post "/batteries/attach", BatteryController, :attach
     post "/batteries/detach", BatteryController, :detach
     post "/batteries/act", BldgController, :act
+    post "/staging/data", StagingController, :write_data
 
     resources "/bldgs", BldgController, except: [:new, :edit], param: "address"
     resources "/residents", ResidentController, except: [:new, :edit]
