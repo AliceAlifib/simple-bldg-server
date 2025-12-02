@@ -5,16 +5,18 @@
 import Config
 
 if config_env() == :prod do
-
   secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
   app_port = System.fetch_env!("APP_PORT")
   app_hostname = System.fetch_env!("APP_HOSTNAME")
   db_user = System.fetch_env!("DB_USER")
   db_password = System.fetch_env!("DB_PASSWORD")
   db_host = System.fetch_env!("DB_HOST")
-  {db_port, _} = Integer.parse(System.fetch_env!("DB_PORT")) # TODO add default value
+  # TODO add default value
+  {db_port, _} = Integer.parse(System.fetch_env!("DB_PORT"))
   db_name = System.fetch_env!("DB_NAME")
-  db_ssl = System.fetch_env!("DB_SSL") == "true"   # TODO add default value
+  db_ssl = System.fetch_env!("DB_SSL") == "true"
+  # TODO add default value
+  dgraph_url = System.fetch_env!("DGRAPH_URL")
 
   config :bldg_server, BldgServerWeb.Endpoint,
     http: [:inet6, port: String.to_integer(app_port)],
@@ -36,9 +38,9 @@ if config_env() == :prod do
     ssl: db_ssl,
     pool_size: 20,
     queue_target: 5000,
-    queue_interval: 10000
-    #socket_options: [:inet6]
-
+    # ,
+    queue_interval: 10000,
+    socket_options: [:inet6]
 end
 
 config :bldg_server, BldgServer.Mailer,
@@ -47,7 +49,6 @@ config :bldg_server, BldgServer.Mailer,
   hackney_opts: [
     recv_timeout: :timer.minutes(1)
   ]
-
 
 # ## Using releases (Elixir v1.9+)
 #

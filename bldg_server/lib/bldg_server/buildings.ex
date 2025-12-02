@@ -8,7 +8,6 @@ defmodule BldgServer.Buildings do
 
   alias BldgServer.Buildings.Bldg
 
-
   def address_delimiter, do: "/"
 
   @doc """
@@ -30,16 +29,18 @@ defmodule BldgServer.Buildings do
   Returns empty list if no such Bldg does exists.
   """
   def list_bldgs_in_flr(flr) do
-    q = from b in Bldg, where: b.flr == ^flr
+    q = from(b in Bldg, where: b.flr == ^flr)
     Repo.all(q)
   end
 
   def list_all_bldgs_in_flr(flr) do
-    q = from b in Bldg,
+    q =
+      from(b in Bldg,
         where: like(b.flr, ^"#{flr}%")
+      )
+
     Repo.all(q)
   end
-
 
   @doc """
   Gets a single bldg.
@@ -62,14 +63,22 @@ defmodule BldgServer.Buildings do
   def get_by_bldg_url(bldg_url), do: Repo.get_by(Bldg, bldg_url: bldg_url)
 
   def get_similar_entities(flr, entity_type) do
-    q = from b in Bldg,
+    q =
+      from(b in Bldg,
         where: b.flr == ^flr and b.entity_type == ^entity_type,
         order_by: b.inserted_at
+      )
+
     Repo.all(q)
   end
 
-  def notify_bldg_created({:error, %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url}}, action, subject, triggering_chat_msg) do
-
+  def notify_bldg_created(
+        {:error,
+         %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url}},
+        action,
+        subject,
+        triggering_chat_msg
+      ) do
     # recursive call, no need to extract location from subject
     IO.puts("Recursive call to notify on bldg-creation-failure: #{:error}")
     action = "failed_to_create_bldg"
@@ -78,6 +87,7 @@ defmodule BldgServer.Buildings do
     if container_addr != "" do
       # TODO handle the case where the container is g
       container = get_bldg!(container_addr)
+
       msg = %{
         "say_speaker" => "bldg_server",
         "say_text" => "/notify #{action} done: #{subject}",
@@ -91,26 +101,28 @@ defmodule BldgServer.Buildings do
         "resident_email" => "bldg_server",
         "say_location" => ""
       }
+
       say(container, msg)
       # recurse to parent container
       notify_bldg_created({:error, container}, action, subject, triggering_chat_msg)
     end
-
   end
-
 
   def notify_bldg_created({:error, error_description}, action, subject, triggering_chat_msg) do
     # errors: [address: {"has already been taken", [constraint: :unique, constraint_name: "bldgs_address_index"]}], data: #BldgServer.Buildings.Bldg<>, valid?: false>
     # Check if error is due to address constraint violation
-    is_address_constraint = case error_description do
-      %{errors: errors} ->
-        Enum.any?(errors, fn {field, {_msg, details}} ->
-          field == :address &&
-          Keyword.get(details, :constraint) == :unique &&
-          Keyword.get(details, :constraint_name) == "bldgs_address_index"
-        end)
-      _ -> false
-    end
+    is_address_constraint =
+      case error_description do
+        %{errors: errors} ->
+          Enum.any?(errors, fn {field, {_msg, details}} ->
+            field == :address &&
+              Keyword.get(details, :constraint) == :unique &&
+              Keyword.get(details, :constraint_name) == "bldgs_address_index"
+          end)
+
+        _ ->
+          false
+      end
 
     if is_address_constraint do
       IO.puts("~~~~~ Error: Address constraint violation detected, retrying create command")
@@ -120,17 +132,23 @@ defmodule BldgServer.Buildings do
         %{"say_location" => location} = msg when is_binary(location) ->
           {x, y} = extract_coords(location)
           # Try moving the location slightly to avoid collision
-          new_x = x + :rand.uniform(3) - 1 # Shift by -1, 0, or 1
-          new_y = y + :rand.uniform(3) - 1 # Shift by -1, 0, or 1
+          # Shift by -1, 0, or 1
+          new_x = x + :rand.uniform(3) - 1
+          # Shift by -1, 0, or 1
+          new_y = y + :rand.uniform(3) - 1
           new_location = String.replace(location, "b(#{x},#{y})", "b(#{new_x},#{new_y})")
           new_msg = Map.put(msg, "say_location", new_location)
           IO.puts("~~~~~ Retrying with new location: #{new_location} (moved from #{location})")
+
           BldgServerWeb.Endpoint.broadcast!(
             "chat",
             "new_message",
             new_msg
           )
-        msg -> msg # Return unchanged if no location or wrong format
+
+        # Return unchanged if no location or wrong format
+        msg ->
+          msg
       end
     end
 
@@ -142,13 +160,18 @@ defmodule BldgServer.Buildings do
     container_flr = get_container_flr(address)
     IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr: #{inspect(container_flr)}")
     container_flr_url = get_container(bldg_url)
-    IO.puts("~~~~ in notify_bldg_created - FAILURE - container_flr_url: #{inspect(container_flr_url)}")
+
+    IO.puts(
+      "~~~~ in notify_bldg_created - FAILURE - container_flr_url: #{inspect(container_flr_url)}"
+    )
+
     action = "failed_to_create_bldg"
     container_addr = get_container(container_flr)
 
     if container_addr != "" do
       # TODO handle the case where the container is g
       container = get_bldg!(container_addr)
+
       msg = %{
         "say_speaker" => "bldg_server",
         "say_text" => "/notify #{action} done: #{subject}",
@@ -162,23 +185,26 @@ defmodule BldgServer.Buildings do
         "resident_email" => "bldg_server",
         "say_location" => ""
       }
+
       say(container, msg)
       # recurse to parent container
       notify_bldg_created({:error, container}, action, subject, triggering_chat_msg)
     end
-
   end
-
 
   def notify_bldg_created({:ok, created_bldg}, action, subject, triggering_chat_msg) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} =
+      created_bldg
+
     IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
     container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+
     if container_addr != "" do
       # TODO handle the case where the container is g
       container = get_bldg!(container_addr)
+
       msg = %{
         "say_speaker" => "bldg_server",
         "say_text" => "/notify #{action} done: #{subject}",
@@ -192,6 +218,7 @@ defmodule BldgServer.Buildings do
         "resident_email" => "bldg_server",
         "say_location" => ""
       }
+
       say(container, msg)
       # recurse to parent container
       notify_bldg_created({:ok, container}, action, subject, triggering_chat_msg)
@@ -206,13 +233,17 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_updated({:ok, updated_bldg} = update_result, action, subject, attrs) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = updated_bldg
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} =
+      updated_bldg
+
     IO.puts("~~~~~ at notify_bldg_updated #{action} - SUCCESS: #{name}")
     container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
+
     if container_addr != "" do
       # TODO handle the case where the container is g
       container = get_bldg!(container_addr)
+
       msg = %{
         "say_speaker" => "bldg_server",
         "say_text" => "/notify #{action} done: #{subject}",
@@ -226,13 +257,14 @@ defmodule BldgServer.Buildings do
         "resident_email" => "bldg_server",
         "say_location" => ""
       }
+
       say(container, msg)
       # recurse to parent container
       notify_bldg_updated({:ok, container}, action, subject, attrs)
     end
+
     update_result
   end
-
 
   @doc """
   Creates a bldg.
@@ -247,16 +279,22 @@ defmodule BldgServer.Buildings do
 
   """
   def create_bldg(attrs \\ %{}, triggering_chat_msg) do
-    cs = %Bldg{}
-    |> Bldg.changeset(attrs)
+    cs =
+      %Bldg{}
+      |> Bldg.changeset(attrs)
+
     # TODO figure out better way to notify bldg_url & address
     created_bldg_url = attrs["bldg_url"]
     created_bldg_address = attrs["address"]
-    created_bldg_web_url = attrs["web_url"] # the "natural key" of the entity
+    # the "natural key" of the entity
+    created_bldg_web_url = attrs["web_url"]
     created_bldg_ids = "#{created_bldg_url}|#{created_bldg_address}|#{created_bldg_web_url}"
+
     case cs.errors do
-      [] -> Repo.insert(cs)
-            |> notify_bldg_created("bldg_created", created_bldg_ids, triggering_chat_msg)
+      [] ->
+        Repo.insert(cs)
+        |> notify_bldg_created("bldg_created", created_bldg_ids, triggering_chat_msg)
+
       _ ->
         Logger.error("Failed to prepare bldg for writing to database: #{inspect(cs.errors)}")
         raise "Failed to prepare bldg for writing to database"
@@ -281,8 +319,10 @@ defmodule BldgServer.Buildings do
     # TODO figure out better way to notify bldg_url & address
     updated_bldg_url = attrs["bldg_url"]
     updated_bldg_address = attrs["address"]
-    updated_bldg_web_url = attrs["web_url"] # the "natural key" of the entity
+    # the "natural key" of the entity
+    updated_bldg_web_url = attrs["web_url"]
     updated_bldg_ids = "#{updated_bldg_url}|#{updated_bldg_address}|#{updated_bldg_web_url}"
+
     if Map.has_key?(attrs, :previous_messages) do
       # don't notify on chat updates
       bldg
@@ -339,25 +379,28 @@ defmodule BldgServer.Buildings do
   #   end
   # end
 
-
   # UTILS
 
   def extract_coords(addr) do
     # get the coords from the last part of the address: "g/b(17,24)/l0/b(-11,6)" -> ["-11","6]
-    [x_s, y_s] = addr
-    |> String.split(address_delimiter())
-    |> List.last()
-    |> String.slice(2..-2)
-    |> String.split(",")
+    [x_s, y_s] =
+      addr
+      |> String.split(address_delimiter())
+      |> List.last()
+      |> String.slice(2..-2)
+      |> String.split(",")
+
     {{x, ""}, {y, ""}} = {Integer.parse(x_s), Integer.parse(y_s)}
     {x, y}
   end
 
   def extract_flr_level(flr) do
-    l_s = case flr do
-      "g" -> "0"
-      _ -> flr |> String.split(address_delimiter()) |> List.last() |> String.slice(1..-1)
-    end
+    l_s =
+      case flr do
+        "g" -> "0"
+        _ -> flr |> String.split(address_delimiter()) |> List.last() |> String.slice(1..-1)
+      end
+
     {level, ""} = Integer.parse(l_s)
     level
   end
@@ -369,7 +412,6 @@ defmodule BldgServer.Buildings do
   def move_from_speaker({x, y}, offset) do
     {x, y + offset}
   end
-
 
   def get_container(addr) do
     addr
@@ -401,9 +443,7 @@ defmodule BldgServer.Buildings do
     end
   end
 
-
   # FRAMEWORK
-
 
   """
   Determines the flr of a new entity to be created
@@ -422,58 +462,71 @@ defmodule BldgServer.Buildings do
 
   TODO simplify
   """
+
   def figure_out_flr(entity) do
-    {flr, flr_url, flr_level} = cond do
-      Map.has_key?(entity, "container_web_url") ->
-        %{"container_web_url" => container} = entity
-        entity_bldg = Buildings.get_by_web_url(container)
-        # TODO handle the case the container bldg doesn't exist
-        {"#{entity_bldg.address}#{address_delimiter()}l0", "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
-      Map.has_key?(entity, "container_bldg_url") ->
-        %{"container_bldg_url" => container} = entity
-        entity_bldg = Buildings.get_by_bldg_url(container)
-        {"#{entity_bldg.address}#{address_delimiter()}l0", "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
-      Map.has_key?(entity, "flr") and Map.has_key?(entity, "flr_url") ->
-        level = extract_flr_level(Map.get(entity, "flr"))
-        {Map.get(entity, "flr"), Map.get(entity, "flr_url"), level}
-      true -> raise "Not enought information to determine where to create the bldg - you need to provide either: container_web_url or container_bldg_url or (flr AND flr_url)"
-    end
+    {flr, flr_url, flr_level} =
+      cond do
+        Map.has_key?(entity, "container_web_url") ->
+          %{"container_web_url" => container} = entity
+          entity_bldg = Buildings.get_by_web_url(container)
+          # TODO handle the case the container bldg doesn't exist
+          {"#{entity_bldg.address}#{address_delimiter()}l0",
+           "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
+
+        Map.has_key?(entity, "container_bldg_url") ->
+          %{"container_bldg_url" => container} = entity
+          entity_bldg = Buildings.get_by_bldg_url(container)
+
+          {"#{entity_bldg.address}#{address_delimiter()}l0",
+           "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
+
+        Map.has_key?(entity, "flr") and Map.has_key?(entity, "flr_url") ->
+          level = extract_flr_level(Map.get(entity, "flr"))
+          {Map.get(entity, "flr"), Map.get(entity, "flr_url"), level}
+
+        true ->
+          raise "Not enought information to determine where to create the bldg - you need to provide either: container_web_url or container_bldg_url or (flr AND flr_url)"
+      end
+
     Map.put(entity, "flr", flr)
     Map.put(entity, "flr_url", flr_url)
     Map.put(entity, "flr_level", flr_level)
   end
 
   def figure_out_bldg_url(entity) do
-    bldg_url = cond do
-      Map.has_key?(entity, "bldg_url") ->
-        Map.get(entity, "bldg_url")
-      Map.has_key?(entity, "flr_url") and Map.has_key?(entity, "name") ->
-        "#{Map.get(entity, "flr_url")}#{address_delimiter()}#{Map.get(entity, "name")}"
-      true ->
-        "g"
-    end
+    bldg_url =
+      cond do
+        Map.has_key?(entity, "bldg_url") ->
+          Map.get(entity, "bldg_url")
+
+        Map.has_key?(entity, "flr_url") and Map.has_key?(entity, "name") ->
+          "#{Map.get(entity, "flr_url")}#{address_delimiter()}#{Map.get(entity, "name")}"
+
+        true ->
+          "g"
+      end
+
     Map.put(entity, "bldg_url", bldg_url)
   end
 
+  """
+  next_location(similar_bldgs)
+  1. Go over similar_bldgs, & store their locations in a cache
+  2. Sort the cache by location x, y
+  2. Go over the cache, & find the start location (sx, sy) - minimal x, minimal y (since origin is bottom left, & we’ll be adding bldgs to the right)
+  3. Loop over the possible locations, from sx to max_x, and from sy to max_y, each time checking whether the current location exists in cache
+  4. If not, return that location
+  5. If finished looping over all possible locations, and sx>0, return the point (sx-1, sy)
 
-"""
-next_location(similar_bldgs)
-1. Go over similar_bldgs, & store their locations in a cache
-2. Sort the cache by location x, y
-2. Go over the cache, & find the start location (sx, sy) - minimal x, minimal y (since origin is bottom left, & we’ll be adding bldgs to the right)
-3. Loop over the possible locations, from sx to max_x, and from sy to max_y, each time checking whether the current location exists in cache
-4. If not, return that location
-5. If finished looping over all possible locations, and sx>0, return the point (sx-1, sy)
 
-
-Given an entity:
-1. Loop until reached max retries:
-1.1. Get similar_bldgs
-1.2. Get next_location
-1.3. Try to store the entity in that location
-1.4. If done, return
-1.5. Else, continue the loop
-"""
+  Given an entity:
+  1. Loop until reached max retries:
+  1.1. Get similar_bldgs
+  1.2. Get next_location
+  1.3. Try to store the entity in that location
+  1.4. If done, return
+  1.5. Else, continue the loop
+  """
 
   def get_locations_map(bldgs) do
     Enum.map(bldgs, fn bldg -> {bldg.x, bldg.y} end)
@@ -487,10 +540,12 @@ Given an entity:
 
   def get_next_available_location(locations, start_location, max_x, max_y) do
     {x, y} = start_location
+
     Enum.reduce_while(y..max_y, nil, fn y, _ ->
-      options = for i <- x..max_x, do: {i,y}
+      options = for i <- x..max_x, do: {i, y}
       whats_available = Enum.map(options, fn loc -> Enum.member?(locations, loc) end)
       pos = Enum.find_index(whats_available, fn b -> !b end)
+
       case pos do
         nil -> {:cont, nil}
         _ -> {:halt, Enum.at(options, pos)}
@@ -516,25 +571,32 @@ Given an entity:
         # try to find place near entities of the same entity-type
         %{"flr" => flr, "entity_type" => entity_type} = entity
         similar_bldgs = Buildings.get_similar_entities(flr, entity_type)
-        {x, y} = case similar_bldgs do
-          [] -> {:rand.uniform(max_x - 1) + 1, :rand.uniform(max_y - 1) + 1}
-          _ -> get_next_location(similar_bldgs, max_x, max_y)
-        end
+
+        {x, y} =
+          case similar_bldgs do
+            [] -> {:rand.uniform(max_x - 1) + 1, :rand.uniform(max_y - 1) + 1}
+            _ -> get_next_location(similar_bldgs, max_x, max_y)
+          end
+
         Map.merge(entity, %{"address" => "#{flr}-b(#{x},#{y})", "x" => x, "y" => y})
-      _ -> entity
+
+      _ ->
+        entity
     end
+
     # TODO handle the case where the location is already caught
   end
 
-
   def calculate_nesting_depth(entity) do
-    num_slashes = Map.get(entity, "address")
-    |> String.split(address_delimiter())
-    |> Enum.drop(1) |> length()
-    depth = case num_slashes do
-      0 -> 0
-      _ -> trunc(num_slashes / 2)
-    end
+    num_slashes =
+      Map.get(entity, "address") |> String.split(address_delimiter()) |> Enum.drop(1) |> length()
+
+    depth =
+      case num_slashes do
+        0 -> 0
+        _ -> trunc(num_slashes / 2)
+      end
+
     Map.put(entity, "nesting_depth", depth)
   end
 
@@ -594,10 +656,15 @@ Given an entity:
     |> Map.put("data", "{\"flr_height\": \"2.57\", \"flr0_height\": \"0.067\"}")
   end
 
+  def add_composite_bldg_metadata(%{"entity_type" => "inbox"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"2.57\", \"flr0_height\": \"0.067\"}")
+  end
+
   def add_composite_bldg_metadata(entity) do
     Map.put(entity, "is_composite", false)
   end
-
 
   def remove_build_params(entity) do
     Map.delete(entity, "container_web_url")
@@ -639,7 +706,6 @@ Given an entity:
     |> remove_build_params()
   end
 
-
   # TODO duplicate code, please consolidate
   def append_message_to_list(msg_list, msg) do
     case msg_list do
@@ -648,16 +714,15 @@ Given an entity:
     end
   end
 
-
   # TODO duplicate code, please consolidate
   def is_command(msg_text), do: String.at(msg_text, 0) == "/"
 
-
   # TODO duplicate code, please consolidate
   def say(%Bldg{} = bldg, msg) do
-    {_, text} = msg
-    |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
-    |> JSON.encode()
+    {_, text} =
+      msg
+      |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
+      |> JSON.encode()
 
     prev_messages = Utils.limit_list_to(bldg.previous_messages, 10)
     IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
@@ -678,5 +743,4 @@ Given an entity:
 
     result
   end
-
 end

@@ -17,7 +17,7 @@ kill_signal = 'SIGTERM'
   PORT = '8080'
   APP_HOSTNAME = 'bldg-server.fly.dev'
   APP_PORT = '8080'
-  SENDGRID_API_KEY = 'notasecret'
+  SENDGRID_API_KEY = 'notapikey'
   DB_HOST = 'bldg-server-db.internal'
   DB_NAME = 'bldg_server'
   DB_PASSWORD = 'notapassword'
@@ -27,6 +27,8 @@ kill_signal = 'SIGTERM'
   REDIS_HOST = 'fly-alicein-redis.upstash.io'
   REDIS_PORT = 6379
   REDIS_PASSWORD = 'notapassword'
+  REDIS_PWD = 'notapassword'
+  DGRAPH_URL = 'dgraph-db.fly.dev'
 
 
 [http_service]
