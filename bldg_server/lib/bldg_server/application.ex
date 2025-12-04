@@ -5,7 +5,18 @@ defmodule BldgServer.Application do
 
   use Application
 
+  require Logger
+
   def start(_type, _args) do
+    # Log Redis configuration for debugging
+    redis_host = System.fetch_env!("REDIS_HOST")
+    redis_password = System.fetch_env!("REDIS_PWD")
+    redis_port = System.fetch_env!("REDIS_PORT") || "6379"
+
+    Logger.info(
+      "Redis configuration - Host: #{redis_host}, Port: #{redis_port}, Pwd: #{redis_password}"
+    )
+
     # List all child processes to be supervised
     children = [
       # Start the Ecto repository
@@ -19,13 +30,14 @@ defmodule BldgServer.Application do
       # Start the http client
       {Finch, name: FinchClient},
       # Start the redis connection
-      {Redix, [
-        host: System.get_env("REDIS_HOST"),
-        #password: System.get_env("REDIS_PASSWORD"),
-        port: String.to_integer(System.get_env("REDIS_PORT") || "6379"),
-        socket_opts: [:inet6],
-        name: :redix
-      ]}
+      {Redix,
+       [
+         host: redis_host,
+         password: redis_password,
+         port: String.to_integer(redis_port),
+         socket_opts: [:inet6],
+         name: :redix
+       ]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
