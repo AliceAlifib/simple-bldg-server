@@ -4,6 +4,7 @@ defmodule BldgServer.Buildings do
   """
 
   import Ecto.Query, warn: false, only: [from: 2]
+  require Logger
   alias BldgServer.Repo
 
   alias BldgServer.Buildings.Bldg
@@ -33,13 +34,23 @@ defmodule BldgServer.Buildings do
     Repo.all(q)
   end
 
-  def list_all_bldgs_in_flr(flr) do
+  def list_all_bldgs_in_flr(flr, include_parent) do
+    # 1. Resolve the parent address only if needed.
+    # If include_parent is false, we set parent_addr to nil.
+    parent_addr = if include_parent, do: get_flr_bldg(flr), else: ""
+
     q =
       from(b in Bldg,
-        where: like(b.flr, ^"#{flr}%")
+        where: like(b.flr, ^"#{flr}%") or (^include_parent and b.address == ^parent_addr)
       )
 
-    Repo.all(q)
+    bldgs = Repo.all(q)
+    IO.puts("~~~ scan returned #{Enum.count(bldgs)} bldgs")
+    bldgs
+  end
+
+  def list_all_bldgs_in_flr(flr) do
+    list_all_bldgs_in_flr(flr, false)
   end
 
   @doc """
