@@ -4,7 +4,7 @@ defmodule BldgServerWeb.BldgController do
   alias BldgServer.Buildings
   alias BldgServer.Buildings.Bldg
 
-  action_fallback BldgServerWeb.FallbackController
+  action_fallback(BldgServerWeb.FallbackController)
 
   def index(conn, _params) do
     bldgs = Buildings.list_bldgs()
@@ -12,12 +12,16 @@ defmodule BldgServerWeb.BldgController do
   end
 
   def create(conn, %{"bldg" => bldg_params}) do
+    IO.puts("~~~ create")
+    IO.inspect(bldg_params)
+
     case Buildings.create_bldg(bldg_params) do
       {:ok, %Bldg{} = bldg} ->
         conn
         |> put_status(:created)
         |> put_resp_header("location", Routes.bldg_path(conn, :show, bldg))
         |> render("show.json", bldg: bldg)
+
       {:error, error_message} ->
         IO.puts(error_message)
     end
@@ -68,30 +72,44 @@ defmodule BldgServerWeb.BldgController do
     create(conn, %{"bldg" => bldg})
   end
 
-
   def relocate(conn, %{"address" => address, "new_address" => new_address}) do
     {new_x, new_y} = Buildings.extract_coords(new_address)
     bldg_params = %{"address" => new_address, "x" => new_x, "y" => new_y}
     update(conn, %{"address" => address, "bldg" => bldg_params})
   end
 
-
   @doc """
   Receives a web_url & returns the address of the bldg matching it.
   """
   def resolve_address(conn, %{"web_url" => escaped_web_url}) do
     web_url = URI.decode(escaped_web_url)
+
     case Buildings.get_by_web_url(web_url) do
-      nil -> conn
-              |> put_status(:not_found)
-              |> text("Coudn't find a matching building")
-      bldg -> text conn, bldg.address
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> text("Coudn't find a matching building")
+
+      bldg ->
+        text(conn, bldg.address)
     end
   end
 
-
   # SAY action
-  def act(conn, %{"resident_email" => email, "bldg_url" => bldg_url, "action_type" => "SAY", "say_speaker" => _speaker, "say_text" => _text, "say_flr" => _flr, "say_location" => _location, "say_mimetype" => _msg_mimetype, "say_recipient" => _recipient} = msg) do
+  def act(
+        conn,
+        %{
+          "resident_email" => email,
+          "bldg_url" => bldg_url,
+          "action_type" => "SAY",
+          "say_speaker" => _speaker,
+          "say_text" => _text,
+          "say_flr" => _flr,
+          "say_location" => _location,
+          "say_mimetype" => _msg_mimetype,
+          "say_recipient" => _recipient
+        } = msg
+      ) do
     bldg = Buildings.get_by_bldg_url(bldg_url)
     # TODO verify that the battery has a valid session & access & chat permissions in this bldg
 
@@ -101,6 +119,7 @@ defmodule BldgServerWeb.BldgController do
         |> put_status(:ok)
         |> put_resp_header("location", Routes.bldg_path(conn, :show, upd_bldg))
         |> render("show.json", bldg: upd_bldg)
+
       {:error, e} ->
         IO.inspect(e)
     end

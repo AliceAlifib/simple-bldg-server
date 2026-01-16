@@ -77,7 +77,8 @@ defmodule BldgServer.Buildings do
     q =
       from(b in Bldg,
         where: b.flr == ^flr and b.entity_type == ^entity_type,
-        order_by: b.inserted_at
+        order_by: b.inserted_at,
+        limit: 10
       )
 
     Repo.all(q)
@@ -289,7 +290,9 @@ defmodule BldgServer.Buildings do
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_bldg(attrs \\ %{}, triggering_chat_msg) do
+  def create_bldg(attrs, triggering_chat_msg \\ %{}) do
+    IO.puts("~~~~ create_bldg called")
+
     cs =
       %Bldg{}
       |> Bldg.changeset(attrs)
@@ -303,8 +306,9 @@ defmodule BldgServer.Buildings do
 
     case cs.errors do
       [] ->
-        Repo.insert(cs)
-        |> notify_bldg_created("bldg_created", created_bldg_ids, triggering_chat_msg)
+        result = Repo.insert(cs)
+        notify_bldg_created(result, "bldg_created", created_bldg_ids, triggering_chat_msg)
+        result
 
       _ ->
         Logger.error("Failed to prepare bldg for writing to database: #{inspect(cs.errors)}")
@@ -479,10 +483,16 @@ defmodule BldgServer.Buildings do
       cond do
         Map.has_key?(entity, "container_web_url") ->
           %{"container_web_url" => container} = entity
-          entity_bldg = Buildings.get_by_web_url(container)
+          entity_bldg = get_by_web_url(container)
           # TODO handle the case the container bldg doesn't exist
-          {"#{entity_bldg.address}#{address_delimiter()}l0",
-           "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
+          case entity_bldg.address do
+            "g" ->
+              {"g", "g", 0}
+
+            _ ->
+              {"#{entity_bldg.address}#{address_delimiter()}l0",
+               "#{entity_bldg.bldg_url}#{address_delimiter()}l0", 0}
+          end
 
         Map.has_key?(entity, "container_bldg_url") ->
           %{"container_bldg_url" => container} = entity
@@ -499,9 +509,10 @@ defmodule BldgServer.Buildings do
           raise "Not enought information to determine where to create the bldg - you need to provide either: container_web_url or container_bldg_url or (flr AND flr_url)"
       end
 
-    Map.put(entity, "flr", flr)
-    Map.put(entity, "flr_url", flr_url)
-    Map.put(entity, "flr_level", flr_level)
+    entity
+    |> Map.put("flr", flr)
+    |> Map.put("flr_url", flr_url)
+    |> Map.put("flr_level", flr_level)
   end
 
   def figure_out_bldg_url(entity) do
@@ -514,7 +525,7 @@ defmodule BldgServer.Buildings do
           "#{Map.get(entity, "flr_url")}#{address_delimiter()}#{Map.get(entity, "name")}"
 
         true ->
-          "g"
+          raise "Not enought information to determine the bldg URL"
       end
 
     Map.put(entity, "bldg_url", bldg_url)
@@ -581,7 +592,7 @@ defmodule BldgServer.Buildings do
       nil ->
         # try to find place near entities of the same entity-type
         %{"flr" => flr, "entity_type" => entity_type} = entity
-        similar_bldgs = Buildings.get_similar_entities(flr, entity_type)
+        similar_bldgs = get_similar_entities(flr, entity_type)
 
         {x, y} =
           case similar_bldgs do
@@ -589,7 +600,11 @@ defmodule BldgServer.Buildings do
             _ -> get_next_location(similar_bldgs, max_x, max_y)
           end
 
-        Map.merge(entity, %{"address" => "#{flr}-b(#{x},#{y})", "x" => x, "y" => y})
+        Map.merge(entity, %{
+          "address" => "#{flr}#{address_delimiter()}b(#{x},#{y})",
+          "x" => x,
+          "y" => y
+        })
 
       _ ->
         entity
@@ -612,6 +627,12 @@ defmodule BldgServer.Buildings do
   end
 
   # TODO get this from config
+
+  def add_composite_bldg_metadata(%{"entity_type" => "ground"} = entity) do
+    entity
+    |> Map.put("is_composite", true)
+    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.01\"}")
+  end
 
   def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
     entity
@@ -674,7 +695,10 @@ defmodule BldgServer.Buildings do
   end
 
   def add_composite_bldg_metadata(entity) do
-    Map.put(entity, "is_composite", false)
+    case Map.get(entity, "is_composite") do
+      nil -> Map.put(entity, "is_composite", false)
+      _ -> entity
+    end
   end
 
   def remove_build_params(entity) do
