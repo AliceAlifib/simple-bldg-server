@@ -778,4 +778,11 @@ defmodule BldgServer.Buildings do
 
     result
   end
+
+  def get_batteries_in_floor(flr) do
+    # TODO query for all bldgs in flr of entity_type 'battery'
+  end
+
+  def extract_battery_type(%{entity_type: "battery", name: "name", data: "data"} = b) do
+  end
 end
