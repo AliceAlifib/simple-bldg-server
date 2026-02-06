@@ -4,7 +4,7 @@ defmodule BldgServer.MixProject do
   def project do
     [
       app: :bldg_server,
-      version: "0.8.1",
+      version: "0.9.0",
       elixir: "~> 1.5",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:phoenix] ++ Mix.compilers(),
@@ -42,7 +42,7 @@ defmodule BldgServer.MixProject do
       {:jason, "~> 1.0"},
       {:plug_cowboy, "~> 2.0"},
       {:cors_plug, "~> 2.0"},
-      {:uuid, "~> 1.1" },
+      {:uuid, "~> 1.1"},
       {:json, "~> 1.4"},
       {:finch, "~> 0.7"},
       {:bamboo, "~> 1.7.1"},

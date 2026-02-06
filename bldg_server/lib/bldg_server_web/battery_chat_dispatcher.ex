@@ -5,7 +5,6 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
 
   alias BldgServer.Batteries
 
-
   def start_link(_) do
     GenServer.start_link(__MODULE__, name: __MODULE__)
   end
@@ -20,22 +19,21 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
     {:reply, state, state}
   end
 
-
   def send_message_to_battery(callback_url, msg) do
     {_, msg_json} = Jason.encode(msg)
     IO.puts("~~~~~ About to invoke battery callback URL at: #{callback_url}")
     IO.inspect(msg_json)
     header_key = "content-type"
     header_val = "application/json"
+
     Finch.build(:post, callback_url, [{header_key, header_val}], msg_json)
     |> Finch.request(FinchClient)
     |> IO.inspect()
   end
 
-
-  #def handle_info({sender, message, flr}, state) do
+  # def handle_info({sender, message, flr}, state) do
   def handle_info(%{event: "new_message", payload: new_message}, state) do
-    #Logger.info("chat message received at #{flr} from #{sender}: #{message}")
+    # Logger.info("chat message received at #{flr} from #{sender}: #{message}")
     flr = new_message["say_flr"]
     IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received at #{flr}:")
     IO.inspect(new_message)
@@ -43,9 +41,17 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
     # query for all batteries inside that message flr
     # & invoke the callback url per each battery, with the message details in the body
 
-    batteries = flr
-    |> Batteries.get_batteries_in_floor()
-    |> Enum.map(fn b -> send_message_to_battery(b.callback_url, new_message) end)
+    batteries =
+      flr
+      |> Batteries.get_batteries_in_floor()
+      |> Enum.map(fn b -> send_message_to_battery(b.callback_url, new_message) end)
+
+    # # NEW MECHANISM:
+    # flr
+    # |> Buildings.get_batteries_in_floor()
+    # |> Enum.map(fn b -> Buildings.extract_battery_type(b) end)
+    # |> Enum.map(fn battery_type -> Batteries.get_callback_for_battery_type(battery_type) end)
+    # |> Enum.map(fn callback_url -> send_message_to_battery(callback_url, new_message) end)
 
     {:noreply, state}
   end
