@@ -99,15 +99,12 @@ defmodule BldgServerWeb.BldgController do
   def act(
         conn,
         %{
+          "action_type" => "SAY",
           "resident_email" => email,
           "bldg_url" => bldg_url,
-          "action_type" => "SAY",
+          "say_flr_url" => _flr_url,
           "say_speaker" => _speaker,
-          "say_text" => _text,
-          "say_flr" => _flr,
-          "say_location" => _location,
-          "say_mimetype" => _msg_mimetype,
-          "say_recipient" => _recipient
+          "say_text" => _text
         } = msg
       ) do
     bldg = Buildings.get_by_bldg_url(bldg_url)

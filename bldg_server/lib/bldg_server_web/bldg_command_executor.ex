@@ -158,7 +158,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     # create a bldg with the given entity-type & name, inside the given flr & bldg
 
     # validate that the actor resident/bldg has the sufficient permissions
-    container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
+    container_bldg = Buildings.get_flr_bldg(msg["say_flr_url"]) |> Buildings.get_by_bldg_url()
 
     if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
       raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
@@ -167,8 +167,20 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
       data = fetch_data(data_url)
 
-      {x, y} = Buildings.extract_coords(msg["say_location"]) |> Buildings.move_from_speaker(-4)
-      flr = msg["say_flr"]
+      # if given location, use it, otherwise default to 0,0
+      {x, y} =
+        case Map.get(msg, "say_location") do
+          nil -> {0, 0}
+          say_loc -> Buildings.extract_coords(say_loc) |> Buildings.move_from_speaker(-4)
+        end
+
+      # if given flr, use it, otherwise construct based on given flr_url (which is required)
+      flr =
+        case Map.get(msg, "say_flr") do
+          nil -> "#{container_bldg.address}/l#{Buildings.extract_flr_level(msg["say_flr_url"])}"
+          say_flr -> say_flr
+        end
+
       updated_location = "#{flr}#{Buildings.address_delimiter()}b(#{x},#{y})"
 
       entity = %{
@@ -271,29 +283,50 @@ defmodule BldgServerWeb.BldgCommandExecutor do
   end
 
   # move bldg
-  def execute_command(["/move", "bldg", name, "here"], msg) do
+  def execute_command(
+        ["/move", "bldg", name, "here"],
+        %{say_location: say_location, say_flr_url: say_flr_url, resident_email: resident_email} =
+          msg
+      ) do
     # update the location of the bldg with the given name to the say location
     # TODO composite bldgs should update the location of their children bldgs as well
-    {x, y} = Buildings.extract_coords(msg["say_location"])
-    flr_url = msg["say_flr_url"]
+    {x, y} = Buildings.extract_coords(say_location)
+    flr_url = say_flr_url
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
     # verify that the speaker is also an owner
-    if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+    if Enum.find(bldg.owners, fn x -> x == resident_email end) == nil do
       raise "Unauthorized"
     else
-      Buildings.update_bldg(bldg, %{"address" => msg["say_location"], "x" => x, "y" => y})
+      Buildings.update_bldg(bldg, %{"address" => say_location, "x" => x, "y" => y})
     end
   end
 
+  # move bldg - missing parameters
+  def execute_command(
+        ["/move", "bldg", _name, "here"],
+        msg
+      ) do
+    raise "Missing required say fields (say_location, say_flr_url, resident_email)- received only: #{msg}"
+  end
+
   # relocate bldg
-  def execute_command(["/relocate", "bldg", bldg_url, "here"], msg) do
+  def execute_command(
+        ["/relocate", "bldg", bldg_url, "here"],
+        %{
+          say_location: say_location,
+          say_flr: say_flr,
+          say_flr_url: say_flr_url,
+          resident_email: resident_email
+        } =
+          msg
+      ) do
     # update the bldg_url & address of the bldg with the given bldg_url to the say location
     # TODO composite bldgs should update the location of their children bldgs as well
     # TODO handle location collisions
-    {x, y} = Buildings.extract_coords(msg["say_location"])
+    {x, y} = Buildings.extract_coords(say_location)
     name = Buildings.extract_name(bldg_url)
-    flr_url = msg["say_flr_url"]
+    flr_url = say_flr_url
     new_bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
     container_bldg_url = Buildings.get_container(flr_url)
@@ -309,17 +342,17 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       _ ->
         attrs = %{
           "bldg_url" => new_bldg_url,
-          "address" => msg["say_location"],
+          "address" => say_location,
           "x" => x,
           "y" => y,
-          "flr" => msg["say_flr"],
+          "flr" => say_flr,
           "flr_url" => flr_url,
           "nesting_depth" => container_bldg.nesting_depth + 1,
-          "flr_level" => Buildings.extract_flr_level(msg["say_flr"])
+          "flr_level" => Buildings.extract_flr_level(say_flr)
         }
 
         # verify that the speaker is also an owner
-        if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+        if Enum.find(bldg.owners, fn x -> x == resident_email end) == nil do
           raise "Unauthorized"
         else
           # TODO address may not be exactly the say_location
@@ -328,12 +361,27 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     end
   end
 
+  # relocate bldg - missing parameters
+  def execute_command(
+        ["/relocate", "bldg", _bldg_url, "here"],
+        msg
+      ) do
+    raise "Missing required say fields (say_location, say_flr, say_flr_url, resident_email)- received only: #{msg}"
+  end
+
   # promote bldg inside
-  def execute_command(["/promote", "bldg", name, "inside"], msg) do
+  def execute_command(
+        ["/promote", "bldg", name, "inside"],
+        %{
+          say_location: say_location,
+          say_flr_url: say_flr_url
+        } =
+          msg
+      ) do
     # get speaker location (we'll need it to determine which wallpaper to set)
-    {x, y} = Buildings.extract_coords(msg["say_location"])
+    {x, y} = Buildings.extract_coords(say_location)
     # get the promoted bldg
-    flr_url = msg["say_flr_url"]
+    flr_url = say_flr_url
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
     picture_url = bldg.picture_url
@@ -359,10 +407,24 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     end
   end
 
+  # promote bldg inside - missing parameters
+  def execute_command(
+        ["/promote", "bldg", _name, "inside"],
+        msg
+      ) do
+    raise "Missing required say fields (say_location, say_flr_url)- received only: #{msg}"
+  end
+
   # demote bldg inside
-  def execute_command(["/demote", "bldg", name, "inside"], msg) do
+  def execute_command(
+        ["/demote", "bldg", name, "inside"],
+        %{
+          say_flr_url: say_flr_url
+        } =
+          msg
+      ) do
     # get the promoted bldg
-    flr_url = msg["say_flr_url"]
+    flr_url = say_flr_url
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
     picture_url = bldg.picture_url
@@ -387,6 +449,14 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         # update bldg
         Buildings.update_bldg(container, %{"data" => new_data})
     end
+  end
+
+  # demote bldg inside - missing parameters
+  def execute_command(
+        ["/demote", "bldg", _name, "inside"],
+        msg
+      ) do
+    raise "Missing required say fields (say_flr_url)- received only: #{msg}"
   end
 
   def execute_command(msg_parts, _msg) do
