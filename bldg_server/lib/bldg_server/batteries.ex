@@ -161,4 +161,34 @@ defmodule BldgServer.Batteries do
   def change_battery(%Battery{} = battery) do
     Battery.changeset(battery, %{})
   end
+
+  # --- Battery Registry (Redis) ---
+
+  @registry_prefix "battery_registry:"
+
+  @doc """
+  Registers a callback_url for a given battery_type in the Redis registry.
+  Returns {:ok, count} where count is the number of new members added (0 if already existed).
+  """
+  def register_battery(battery_type, callback_url) do
+    key = @registry_prefix <> battery_type
+    Redix.command(:redix, ["SADD", key, callback_url])
+  end
+
+  @doc """
+  Unregisters a callback_url for a given battery_type from the Redis registry.
+  Returns {:ok, count} where count is the number of members removed (0 if not found).
+  """
+  def unregister_battery(battery_type, callback_url) do
+    key = @registry_prefix <> battery_type
+    Redix.command(:redix, ["SREM", key, callback_url])
+  end
+
+  @doc """
+  Returns all registered callback_urls for a given battery_type.
+  """
+  def get_registered_callbacks(battery_type) do
+    key = @registry_prefix <> battery_type
+    Redix.command(:redix, ["SMEMBERS", key])
+  end
 end

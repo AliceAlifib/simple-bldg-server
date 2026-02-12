@@ -792,12 +792,13 @@ defmodule BldgServer.Buildings do
   def get_batteries_in_floor(flr) do
     q =
       from(b in Bldg,
-        where: b.entity_type == "battery"
+        where: b.flr == ^flr and b.entity_type == "battery"
       )
 
     Repo.all(q)
   end
 
-  def extract_battery_type(%{entity_type: "battery", name: "name", data: "data"} = b) do
+  def extract_battery_type(%{entity_type: "battery", name: name}) do
+    name
   end
 end
