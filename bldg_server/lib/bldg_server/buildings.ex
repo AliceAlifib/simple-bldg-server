@@ -629,9 +629,19 @@ defmodule BldgServer.Buildings do
   # TODO get this from config
 
   def add_composite_bldg_metadata(%{"entity_type" => "ground"} = entity) do
+    default_data = %{flr_height: "1.08", flr0_height: "0.01"}
+
+    combined_data =
+      case Map.get(entity, "data") do
+        nil -> default_data
+        _ -> Map.merge(default_data, Map.get(entity, "data"))
+      end
+
+    {_, data_json} = JSON.encode(combined_data)
+
     entity
     |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"0.01\"}")
+    |> Map.put("data", data_json)
   end
 
   def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
@@ -780,7 +790,12 @@ defmodule BldgServer.Buildings do
   end
 
   def get_batteries_in_floor(flr) do
-    # TODO query for all bldgs in flr of entity_type 'battery'
+    q =
+      from(b in Bldg,
+        where: b.entity_type == "battery"
+      )
+
+    Repo.all(q)
   end
 
   def extract_battery_type(%{entity_type: "battery", name: "name", data: "data"} = b) do
