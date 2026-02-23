@@ -35,13 +35,13 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
   # def handle_info({sender, message, flr}, state) do
   def handle_info(%{event: "new_message", payload: new_message}, state) do
     # Logger.info("chat message received at #{flr} from #{sender}: #{message}")
-    flr = new_message["say_flr"]
-    IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received at #{flr}:")
+    flr_url = new_message["say_flr_url"]
+    IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received at #{flr_url}:")
     IO.inspect(new_message)
 
     # find battery bldgs on this floor, extract their types,
     # then look up registered callback_urls from Redis for each type
-    flr
+    flr_url
     |> Buildings.get_batteries_in_floor()
     |> Enum.map(fn b -> Buildings.extract_battery_type(b) end)
     |> Enum.uniq()
@@ -54,7 +54,9 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
           IO.puts("~~~ [battery chat dispatcher] no callbacks registered for #{battery_type}")
 
         {:error, reason} ->
-          IO.puts("~~~ [battery chat dispatcher] failed to get callbacks for #{battery_type}: #{inspect(reason)}")
+          IO.puts(
+            "~~~ [battery chat dispatcher] failed to get callbacks for #{battery_type}: #{inspect(reason)}"
+          )
       end
     end)
 

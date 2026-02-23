@@ -789,10 +789,10 @@ defmodule BldgServer.Buildings do
     result
   end
 
-  def get_batteries_in_floor(flr) do
+  def get_batteries_in_floor(flr_url) do
     q =
       from(b in Bldg,
-        where: b.flr == ^flr and b.entity_type == "battery"
+        where: b.flr_url == ^flr_url and b.entity_type == "battery"
       )
 
     Repo.all(q)
