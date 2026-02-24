@@ -78,6 +78,20 @@ defmodule BldgServerWeb.BldgController do
     update(conn, %{"address" => address, "bldg" => bldg_params})
   end
 
+  def show_by_bldg_url(conn, %{"bldg_url" => escaped_bldg_url}) do
+    bldg_url = URI.decode(escaped_bldg_url)
+
+    case Buildings.get_by_bldg_url(bldg_url) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> text("Couldn't find a building with that bldg_url")
+
+      bldg ->
+        render(conn, "show.json", bldg: bldg)
+    end
+  end
+
   @doc """
   Receives a web_url & returns the address of the bldg matching it.
   """

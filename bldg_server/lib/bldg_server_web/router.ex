@@ -9,6 +9,7 @@ defmodule BldgServerWeb.Router do
     pipe_through(:api)
 
     get("/bldgs/resolve_address", BldgController, :resolve_address)
+    get("/bldgs/by_bldg_url", BldgController, :show_by_bldg_url)
     get("/bldgs/look/:flr", BldgController, :look)
     get("/bldgs/scan/:flr", BldgController, :scan)
     post("/bldgs/build", BldgController, :build)

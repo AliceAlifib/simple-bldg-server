@@ -206,8 +206,10 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_created({:ok, created_bldg}, action, subject, triggering_chat_msg) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} =
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url, owners: owners} =
       created_bldg
+
+    resident_email = List.first(owners) || "bldg_server"
 
     IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
     container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
@@ -227,7 +229,7 @@ defmodule BldgServer.Buildings do
         "say_mimetype" => "text/plain",
         "say_recipient" => "",
         "say_time" => 0,
-        "resident_email" => "bldg_server",
+        "resident_email" => resident_email,
         "say_location" => ""
       }
 
@@ -245,8 +247,10 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_updated({:ok, updated_bldg} = update_result, action, subject, attrs) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} =
+    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url, owners: owners} =
       updated_bldg
+
+    resident_email = List.first(owners) || "bldg_server"
 
     IO.puts("~~~~~ at notify_bldg_updated #{action} - SUCCESS: #{name}")
     container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
@@ -266,7 +270,7 @@ defmodule BldgServer.Buildings do
         "say_mimetype" => "text/plain",
         "say_recipient" => "",
         "say_time" => 0,
-        "resident_email" => "bldg_server",
+        "resident_email" => resident_email,
         "say_location" => ""
       }
 
