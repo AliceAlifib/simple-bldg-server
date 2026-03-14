@@ -78,6 +78,20 @@ defmodule BldgServerWeb.BldgController do
     update(conn, %{"address" => address, "bldg" => bldg_params})
   end
 
+  def show_by_bldg_url(conn, %{"bldg_url" => escaped_bldg_url}) do
+    bldg_url = URI.decode(escaped_bldg_url)
+
+    case Buildings.get_by_bldg_url(bldg_url) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> text("Couldn't find a building with that bldg_url")
+
+      bldg ->
+        render(conn, "show.json", bldg: bldg)
+    end
+  end
+
   @doc """
   Receives a web_url & returns the address of the bldg matching it.
   """
@@ -111,23 +125,23 @@ defmodule BldgServerWeb.BldgController do
     # TODO verify that the battery has a valid session & access & chat permissions in this bldg
 
     # TODO - TECH DEBT!!! - temp code that needs to be cleaned
-    msg_with_say_flr =
-      case Map.get(msg, "say_flr") do
-        nil -> Map.put(msg, "say_flr", "#{bldg.address}/l0")
-        _ -> msg
-      end
+    # msg_with_say_flr =
+    #   case Map.get(msg, "say_flr") do
+    #     nil -> Map.put(msg, "say_flr", "#{bldg.address}/l0")
+    #     _ -> msg
+    #   end
 
-    msg_with_say_location =
-      case Map.get(msg_with_say_flr, "say_location") do
-        nil -> Map.put(msg_with_say_flr, "say_location", "#{bldg.address}/l0/b(0,0)")
-        _ -> msg_with_say_flr
-      end
+    # msg_with_say_location =
+    #   case Map.get(msg_with_say_flr, "say_location") do
+    #     nil -> Map.put(msg_with_say_flr, "say_location", "#{bldg.address}/l0/b(0,0)")
+    #     _ -> msg_with_say_flr
+    #   end
 
     # This can stay
     msg_with_say_time =
-      case Map.get(msg_with_say_location, "say_time") do
-        nil -> Map.put(msg_with_say_location, "say_time", System.system_time(:millisecond))
-        _ -> msg_with_say_location
+      case Map.get(msg, "say_time") do
+        nil -> Map.put(msg, "say_time", System.system_time(:millisecond))
+        _ -> msg
       end
 
     case Buildings.say(bldg, msg_with_say_time) do

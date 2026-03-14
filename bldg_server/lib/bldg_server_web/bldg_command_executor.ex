@@ -307,17 +307,19 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         ["/move", "bldg", _name, "here"],
         msg
       ) do
-    raise "Missing required say fields (say_location, say_flr_url, resident_email)- received only: #{msg}"
+    received_keys = msg |> Map.keys() |> Enum.join(", ")
+
+    raise "Missing required say fields (say_location, say_flr_url, resident_email)- received only: #{received_keys}"
   end
 
   # relocate bldg
   def execute_command(
         ["/relocate", "bldg", bldg_url, "here"],
         %{
-          say_location: say_location,
-          say_flr: say_flr,
-          say_flr_url: say_flr_url,
-          resident_email: resident_email
+          "say_location" => say_location,
+          "say_flr" => say_flr,
+          "say_flr_url" => say_flr_url,
+          "resident_email" => resident_email
         } =
           msg
       ) do
@@ -366,15 +368,17 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         ["/relocate", "bldg", _bldg_url, "here"],
         msg
       ) do
-    raise "Missing required say fields (say_location, say_flr, say_flr_url, resident_email)- received only: #{msg}"
+    received_keys = msg |> Map.keys() |> Enum.join(", ")
+
+    raise "Missing required say fields (say_location, say_flr, say_flr_url, resident_email) - received only: #{received_keys}"
   end
 
   # promote bldg inside
   def execute_command(
         ["/promote", "bldg", name, "inside"],
         %{
-          say_location: say_location,
-          say_flr_url: say_flr_url
+          "say_location" => say_location,
+          "say_flr_url" => say_flr_url
         } =
           msg
       ) do
@@ -412,14 +416,16 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         ["/promote", "bldg", _name, "inside"],
         msg
       ) do
-    raise "Missing required say fields (say_location, say_flr_url)- received only: #{msg}"
+    received_keys = msg |> Map.keys() |> Enum.join(", ")
+
+    raise "Missing required say fields (say_location, say_flr_url)- received only: #{received_keys}"
   end
 
   # demote bldg inside
   def execute_command(
         ["/demote", "bldg", name, "inside"],
         %{
-          say_flr_url: say_flr_url
+          "say_flr_url" => say_flr_url
         } =
           msg
       ) do
@@ -456,7 +462,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         ["/demote", "bldg", _name, "inside"],
         msg
       ) do
-    raise "Missing required say fields (say_flr_url)- received only: #{msg}"
+    received_keys = msg |> Map.keys() |> Enum.join(", ")
+    raise "Missing required say fields (say_flr_url)- received only: #{received_keys}"
   end
 
   def execute_command(msg_parts, _msg) do

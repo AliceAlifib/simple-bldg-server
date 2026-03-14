@@ -11,16 +11,38 @@ defmodule BldgServerWeb.BatteryController do
     render(conn, "index.json", batteries: batteries)
   end
 
-  def register(conn, %{"battery" => battery_params}) do
+  def register(conn, %{"battery" => %{"battery_type" => battery_type, "callback_url" => callback_url}}) do
     # TODO must check authorization
-    # TODO validate parameters - must contain battery_type, callback_url
-    # TODO add to registry in Redis - battery_type -> [callback_url1, ...]
+    IO.puts("Registering battery type '#{battery_type}' with callback_url: #{callback_url}")
+
+    case Batteries.register_battery(battery_type, callback_url) do
+      {:ok, _count} ->
+        conn
+        |> put_status(:ok)
+        |> json(%{status: "registered", battery_type: battery_type, callback_url: callback_url})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "Failed to register battery", reason: inspect(reason)})
+    end
   end
 
-  def unregister(conn, %{"battery" => battery_params}) do
+  def unregister(conn, %{"battery" => %{"battery_type" => battery_type, "callback_url" => callback_url}}) do
     # TODO must check authorization
-    # TODO validate parameters - must contain battery_type, callback_url
-    # TODO remove from registry in Redis - battery_type -> [callback_url1, ...]
+    IO.puts("Unregistering battery type '#{battery_type}' callback_url: #{callback_url}")
+
+    case Batteries.unregister_battery(battery_type, callback_url) do
+      {:ok, _count} ->
+        conn
+        |> put_status(:ok)
+        |> json(%{status: "unregistered", battery_type: battery_type, callback_url: callback_url})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "Failed to unregister battery", reason: inspect(reason)})
+    end
   end
 
   def attach(conn, %{"battery" => battery_params}) do
