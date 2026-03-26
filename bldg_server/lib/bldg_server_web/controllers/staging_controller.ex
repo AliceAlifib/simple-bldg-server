@@ -6,9 +6,13 @@ defmodule BldgServerWeb.StagingController do
   require Logger
 
   def write_data(conn, %{"storage_type"  => "dgraph", "namespace"  => namespace, "entity_type"  => entity_type, "items" => items}) when is_list(items) do
-    # add the dgraph.type attribute to all items
+    # add the dgraph.type attribute to items that don't already have it
     enriched_items = Enum.map(items, fn item ->
-      Map.put(item, "dgraph.type", entity_type)
+      if Map.has_key?(item, "dgraph.type") do
+        item
+      else
+        Map.put(item, "dgraph.type", entity_type)
+      end
     end)
     # Validate objects before sending to Dgraph
     case validate_objects(enriched_items) do
@@ -80,6 +84,72 @@ defmodule BldgServerWeb.StagingController do
 
       true ->
         validate_object_size(objects)
+    end
+  end
+
+  def read_by_namespace(conn, %{"namespace" => namespace}) do
+    dql = """
+    {
+      all(func: eq(namespace, "#{namespace}")) {
+        uid
+        dgraph.type
+        expand(_all_) {
+          uid
+          dgraph.type
+          expand(_all_) {
+            uid
+            dgraph.type
+            expand(_all_)
+          }
+        }
+      }
+    }
+    """
+
+    case DgraphClient.query(dql) do
+      {:ok, data} ->
+        conn |> put_status(:ok) |> json(%{success: true, data: data})
+
+      {:error, reason} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{success: false, error: reason})
+    end
+  end
+
+  def read_by_type(conn, %{"namespace" => namespace, "entity_type" => entity_type}) do
+    dql = """
+    {
+      all(func: eq(namespace, "#{namespace}")) @filter(type(#{entity_type})) {
+        uid
+        dgraph.type
+        expand(_all_) {
+          uid
+          dgraph.type
+          expand(_all_) {
+            uid
+            dgraph.type
+            expand(_all_)
+          }
+        }
+      }
+    }
+    """
+
+    case DgraphClient.query(dql) do
+      {:ok, data} ->
+        conn |> put_status(:ok) |> json(%{success: true, data: data})
+
+      {:error, reason} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{success: false, error: reason})
+    end
+  end
+
+  def run_query(conn, %{"query" => dql}) do
+    case DgraphClient.query(dql) do
+      {:ok, data} ->
+        conn |> put_status(:ok) |> json(%{success: true, data: data})
+
+      {:error, reason} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{success: false, error: reason})
     end
   end
 
