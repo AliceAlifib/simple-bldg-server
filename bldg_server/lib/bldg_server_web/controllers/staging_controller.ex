@@ -90,7 +90,7 @@ defmodule BldgServerWeb.StagingController do
   def read_by_namespace(conn, %{"namespace" => namespace}) do
     dql = """
     {
-      all(func: eq(namespace, "#{namespace}")) {
+      all(func: eq(ns, "#{namespace}")) {
         uid
         dgraph.type
         expand(_all_) {
@@ -99,7 +99,11 @@ defmodule BldgServerWeb.StagingController do
           expand(_all_) {
             uid
             dgraph.type
-            expand(_all_)
+            expand(_all_) {
+              uid
+              dgraph.type
+              expand(_all_)
+            }
           }
         }
       }
@@ -118,7 +122,7 @@ defmodule BldgServerWeb.StagingController do
   def read_by_type(conn, %{"namespace" => namespace, "entity_type" => entity_type}) do
     dql = """
     {
-      all(func: eq(namespace, "#{namespace}")) @filter(type(#{entity_type})) {
+      all(func: eq(ns, "#{namespace}")) @filter(type(#{entity_type})) {
         uid
         dgraph.type
         expand(_all_) {
@@ -127,7 +131,11 @@ defmodule BldgServerWeb.StagingController do
           expand(_all_) {
             uid
             dgraph.type
-            expand(_all_)
+            expand(_all_) {
+              uid
+              dgraph.type
+              expand(_all_)
+            }
           }
         }
       }

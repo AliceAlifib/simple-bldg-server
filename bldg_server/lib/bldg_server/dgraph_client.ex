@@ -5,20 +5,24 @@ defmodule BldgServer.DgraphClient do
 
   require Logger
 
-  @dgraph_url Application.compile_env(:bldg_server, :dgraph_url, "http://host.docker.internal:8080")
-  @mutate_endpoint "#{@dgraph_url}/mutate?commitNow=true"
-  @query_endpoint "#{@dgraph_url}/query"
-  @alter_endpoint "#{@dgraph_url}/alter"
   @timeout 30_000
+
+  defp dgraph_url do
+    Application.get_env(:bldg_server, :dgraph_url, "http://host.docker.internal:8080")
+  end
+
+  defp mutate_endpoint, do: "#{dgraph_url()}/mutate?commitNow=true"
+  defp query_endpoint, do: "#{dgraph_url()}/query"
+  defp alter_endpoint, do: "#{dgraph_url()}/alter"
 
   # Public API - uses the existing Finch instance
   def mutate_objects(objects) when is_list(objects) do
-    Logger.info("Using #{@dgraph_url}")
+    Logger.info("Using #{dgraph_url()}")
     perform_mutation(objects)
   end
 
   def query(dql_query, variables \\ %{}) do
-    Logger.info("Querying Dgraph at #{@dgraph_url}")
+    Logger.info("Querying Dgraph at #{dgraph_url()}")
 
     {headers, body} =
       if variables == %{} do
@@ -28,7 +32,7 @@ defmodule BldgServer.DgraphClient do
          Jason.encode!(%{"query" => dql_query, "variables" => variables})}
       end
 
-    request = Finch.build(:post, @query_endpoint, headers, body)
+    request = Finch.build(:post, query_endpoint(), headers, body)
 
     case Finch.request(request, FinchClient, receive_timeout: @timeout) do
       {:ok, %Finch.Response{status: 200, body: response_body}} ->
@@ -53,10 +57,10 @@ defmodule BldgServer.DgraphClient do
   end
 
   def alter_schema(schema_text) do
-    Logger.info("Altering Dgraph schema at #{@dgraph_url}")
+    Logger.info("Altering Dgraph schema at #{dgraph_url()}")
 
     headers = [{"content-type", "application/octet-stream"}]
-    request = Finch.build(:post, @alter_endpoint, headers, schema_text)
+    request = Finch.build(:post, alter_endpoint(), headers, schema_text)
 
     case Finch.request(request, FinchClient, receive_timeout: @timeout) do
       {:ok, %Finch.Response{status: 200}} ->
@@ -88,12 +92,13 @@ defmodule BldgServer.DgraphClient do
     ]
 
     with {:ok, json_body} <- Jason.encode(mutation_data),
-         request <- Finch.build(:post, @mutate_endpoint, headers, json_body),
+         request <- Finch.build(:post, mutate_endpoint(), headers, json_body),
          {:ok, %Finch.Response{status: 200, body: response_body}} <-
            # Use the existing Finch instance (likely named :finch or similar)
            Finch.request(request, FinchClient, receive_timeout: @timeout),
          {:ok, response} <- Jason.decode(response_body) do
 
+      Logger.info("Dgraph mutation response: #{inspect(response)}")
       extract_uids(response)
     else
       {:ok, %Finch.Response{status: status, body: body}} ->
