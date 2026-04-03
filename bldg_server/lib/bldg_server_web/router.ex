@@ -27,6 +27,9 @@ defmodule BldgServerWeb.Router do
     post("/batteries/attach", BatteryController, :attach)
     post("/batteries/detach", BatteryController, :detach)
     post("/batteries/act", BldgController, :act)
+    get("/staging/data/:namespace/:entity_type", StagingController, :read_by_type)
+    get("/staging/data/:namespace", StagingController, :read_by_namespace)
+    post("/staging/query", StagingController, :run_query)
     post("/staging/data", StagingController, :write_data)
 
     resources("/bldgs", BldgController, except: [:new, :edit], param: "address")

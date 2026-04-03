@@ -5,14 +5,79 @@ defmodule BldgServer.DgraphClient do
 
   require Logger
 
-  @dgraph_url Application.compile_env(:bldg_server, :dgraph_url, "http://host.docker.internal:8080")
-  @mutate_endpoint "#{@dgraph_url}/mutate?commitNow=true"
   @timeout 30_000
+
+  defp dgraph_url do
+    Application.get_env(:bldg_server, :dgraph_url, "http://host.docker.internal:8080")
+  end
+
+  defp mutate_endpoint, do: "#{dgraph_url()}/mutate?commitNow=true"
+  defp query_endpoint, do: "#{dgraph_url()}/query"
+  defp alter_endpoint, do: "#{dgraph_url()}/alter"
 
   # Public API - uses the existing Finch instance
   def mutate_objects(objects) when is_list(objects) do
-    Logger.info("Using #{@dgraph_url}")
+    Logger.info("Using #{dgraph_url()}")
     perform_mutation(objects)
+  end
+
+  def query(dql_query, variables \\ %{}) do
+    Logger.info("Querying Dgraph at #{dgraph_url()}")
+
+    {headers, body} =
+      if variables == %{} do
+        {[{"content-type", "application/dql"}, {"accept", "application/json"}], dql_query}
+      else
+        {[{"content-type", "application/json"}, {"accept", "application/json"}],
+         Jason.encode!(%{"query" => dql_query, "variables" => variables})}
+      end
+
+    request = Finch.build(:post, query_endpoint(), headers, body)
+
+    case Finch.request(request, FinchClient, receive_timeout: @timeout) do
+      {:ok, %Finch.Response{status: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, %{"data" => data}} -> {:ok, data}
+          {:ok, other} -> {:ok, other}
+          {:error, error} -> {:error, "JSON decoding failed: #{Exception.message(error)}"}
+        end
+
+      {:ok, %Finch.Response{status: status, body: body}} ->
+        Logger.error("Dgraph query returned status #{status}: #{body}")
+        {:error, "Dgraph query error (#{status}): #{body}"}
+
+      {:error, %Finch.Error{} = error} ->
+        Logger.error("Dgraph query request failed: #{Exception.message(error)}")
+        {:error, "Connection to Dgraph failed: #{Exception.message(error)}"}
+
+      {:error, reason} ->
+        Logger.error("Unexpected query error: #{inspect(reason)}")
+        {:error, "Query failed: #{inspect(reason)}"}
+    end
+  end
+
+  def alter_schema(schema_text) do
+    Logger.info("Altering Dgraph schema at #{dgraph_url()}")
+
+    headers = [{"content-type", "application/octet-stream"}]
+    request = Finch.build(:post, alter_endpoint(), headers, schema_text)
+
+    case Finch.request(request, FinchClient, receive_timeout: @timeout) do
+      {:ok, %Finch.Response{status: 200}} ->
+        :ok
+
+      {:ok, %Finch.Response{status: status, body: body}} ->
+        Logger.error("Dgraph alter returned status #{status}: #{body}")
+        {:error, "Dgraph alter error (#{status}): #{body}"}
+
+      {:error, %Finch.Error{} = error} ->
+        Logger.error("Dgraph alter request failed: #{Exception.message(error)}")
+        {:error, "Connection to Dgraph failed: #{Exception.message(error)}"}
+
+      {:error, reason} ->
+        Logger.error("Unexpected alter error: #{inspect(reason)}")
+        {:error, "Alter failed: #{inspect(reason)}"}
+    end
   end
 
   # Private functions
@@ -27,12 +92,13 @@ defmodule BldgServer.DgraphClient do
     ]
 
     with {:ok, json_body} <- Jason.encode(mutation_data),
-         request <- Finch.build(:post, @mutate_endpoint, headers, json_body),
+         request <- Finch.build(:post, mutate_endpoint(), headers, json_body),
          {:ok, %Finch.Response{status: 200, body: response_body}} <-
            # Use the existing Finch instance (likely named :finch or similar)
            Finch.request(request, FinchClient, receive_timeout: @timeout),
          {:ok, response} <- Jason.decode(response_body) do
 
+      Logger.info("Dgraph mutation response: #{inspect(response)}")
       extract_uids(response)
     else
       {:ok, %Finch.Response{status: status, body: body}} ->

@@ -18,6 +18,8 @@ if config_env() == :prod do
   # TODO add default value
   dgraph_url = System.fetch_env!("DGRAPH_URL")
 
+  config :bldg_server, :dgraph_url, dgraph_url
+
   config :bldg_server, BldgServerWeb.Endpoint,
     http: [:inet6, port: String.to_integer(app_port)],
     secret_key_base: secret_key_base

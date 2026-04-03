@@ -1,0 +1,82 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+BldgServer is a reference implementation of the Alice-in protocol server, built with Elixir/Phoenix 1.7. It serves Alice-in visualizations to clients and manages hierarchical data entities ("buildings"), relationships ("roads"), users ("residents"), and external integrations ("batteries").
+
+## Build & Development Commands
+
+All commands run from the `bldg_server/` directory:
+
+```bash
+mix deps.get              # Install dependencies
+mix ecto.setup            # Create DB, run migrations, seed
+mix ecto.migrate          # Run pending migrations
+mix phx.server            # Start dev server (HTTP :4000, HTTPS :4443)
+mix test                  # Run all tests
+mix test test/path_test.exs          # Run a single test file
+mix test test/path_test.exs:42       # Run a specific test by line
+```
+
+Docker for local dev (starts PostgreSQL):
+```bash
+docker-compose up
+```
+
+Production release runs migrations via `/app/bin/migrate`.
+
+## Architecture
+
+### Domain Model
+
+- **Bldg** (`lib/bldg_server/buildings.ex`, schema in `buildings/bldg.ex`) — Core entity. Represents anything: buildings, members, teams, stages, milestones. Has a hierarchical address system rooted at "g" (ground), e.g. `g/b(3,2)/l0/b(1,1)`.
+- **Resident** (`lib/bldg_server/residents.ex`) — User accounts with email-based passwordless auth (magic link verification).
+- **Battery** (`lib/bldg_server/batteries.ex`) — External data source integrations that attach to buildings and sync data.
+- **Road** (`lib/bldg_server/relations.ex`) — Relationships/connections between buildings.
+
+### Key Subsystems
+
+- **BldgCommandExecutor** (`lib/bldg_server_web/bldg_command_executor.ex`) — Processes chat commands ("say" actions) in buildings, broadcasts via Phoenix PubSub on the "chat" topic.
+- **BatteryChatDispatcher** (`lib/bldg_server_web/battery_chat_dispatcher.ex`) — Forwards chat messages to attached batteries' webhook endpoints.
+- **DgraphClient** (`lib/bldg_server/dgraph_client.ex`) — Client for the DGraph graph database, used for staging/transient data.
+- **StagingController** — Manages temporary/staged data in the graph DB with namespace/entity_type organization.
+- **Notifications** (`lib/bldg_server/notifications.ex`) — Propagates creation/update events up the container hierarchy.
+
+### Address System
+
+The hierarchical address is central to the data model:
+- Root floor: `"g"` (ground)
+- Building addresses: `g/b(x,y)` where x,y are coordinates
+- Nested floors: `g/b(x,y)/l0/b(x,y)` — buildings contain floors which contain more buildings
+- Delimiter: `"/"`
+- Each bldg has: `address`, `flr` (parent floor), `flr_url`, `entity_type`, `x`, `y`
+
+### Data Stores
+
+- **PostgreSQL** — Primary database (Ecto/postgrex)
+- **Redis** (Upstash in prod) — Caching and pub/sub via Redix
+- **DGraph** — Graph database for staging/transient data queries
+
+### API Structure
+
+All API routes are under `/api/v1/` (see `lib/bldg_server_web/router.ex`):
+- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing
+- `/residents/*` — Auth (login/verify), resident actions, `look`/`scan`
+- `/roads/*` — Relationship management, `look`/`scan`
+- `/batteries/*` — Register/unregister, attach/detach, act
+- `/staging/*` — Read/write/query staged data by namespace
+
+`look/:flr` returns direct children of a floor; `scan/:flr` returns all nested descendants.
+
+## Deployment
+
+Deployed to Fly.io (`bldg_server/fly.toml`), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`.
+
+## Key Conventions
+
+- JSON API only (no HTML views) — all controllers render JSON via view modules in `views/`.
+- Auto-placement logic in `Buildings.create_bldg/1` handles coordinate collision by shifting x+1 and retrying.
+- Composite entity types (e.g., "team", "project") have predefined floor heights in `BldgController`.
+- Building creation triggers hierarchical notifications up the container chain.
