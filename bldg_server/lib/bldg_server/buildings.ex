@@ -9,6 +9,52 @@ defmodule BldgServer.Buildings do
 
   alias BldgServer.Buildings.Bldg
 
+  @default_visual_language %{
+    "ground" => %{"3d_object" => "ground", "flr_height" => "1.08", "flr0_height" => "0.01"},
+    "stage" => %{"3d_object" => "stage", "flr_height" => "0.9", "flr0_height" => "0.022"},
+    "green-lot" => %{"3d_object" => "greenLot", "flr_height" => "0.9", "flr0_height" => "0.022"},
+    "blue-lot" => %{"3d_object" => "blueLot", "flr_height" => "0.9", "flr0_height" => "0.022"},
+    "milestone" => %{"3d_object" => "gardenRoundTable", "flr_height" => "0.63", "flr0_height" => "0.0"},
+    "team" => %{"3d_object" => "buildingWithStorefront", "flr_height" => "0.9", "flr0_height" => "0.05"},
+    "storage" => %{"3d_object" => "storageBuilding", "flr_height" => "0.7", "flr0_height" => "0.03"},
+    "costs" => %{"3d_object" => "chestOfDrawers", "flr_height" => "2.57", "flr0_height" => "0.067"},
+    "inbox" => %{"3d_object" => "tray", "flr_height" => "2.57", "flr0_height" => "0.067"},
+    "sales" => %{"3d_object" => "bookCabinet", "flr_height" => "3.0", "flr0_height" => "1.3"},
+    "problem" => %{"3d_object" => "livingRoomTable", "flr_height" => "1.08", "flr0_height" => "1.11"},
+    "purpose" => %{"3d_object" => "whiteboard"},
+    "cantata" => %{"3d_object" => "presentationStand"},
+    "neighborhood" => %{"3d_object" => "trafficSign"},
+    "street" => %{"3d_object" => "streetSign"},
+    "construction" => %{"3d_object" => "construction"},
+    "age" => %{"3d_object" => "tree"},
+    "delivery" => %{"3d_object" => "tree"},
+    "goal" => %{"3d_object" => "coffeeTable"},
+    "solution" => %{"3d_object" => "couch"},
+    "product" => %{"3d_object" => "sofa"},
+    "service" => %{"3d_object" => "fancyChair"},
+    "capability" => %{"3d_object" => "coffeeTableChair"},
+    "member" => %{"3d_object" => "standingLight"},
+    "customer" => %{"3d_object" => "candle"},
+    "community" => %{"3d_object" => "fireplace"},
+    "task" => %{"3d_object" => "pottedPlant"},
+    "project" => %{"3d_object" => "tree"},
+    "action" => %{"3d_object" => "largePottedPlant"},
+    "equity" => %{"3d_object" => "tableWithDrawers"},
+    "agreement" => %{"3d_object" => "owlSculpture"},
+    "decision" => %{"3d_object" => "headSculpture"},
+    "person" => %{"3d_object" => "person"},
+    "agent" => %{"3d_object" => "agent"},
+    "battery" => %{"3d_object" => "tv"},
+    "ai-chat" => %{"3d_object" => "documentDisplay"},
+    "label" => %{"3d_object" => "flag_blue"},
+    "yellow-lot" => %{"3d_object" => "yellowLot"},
+    "storage-box" => %{"3d_object" => "storageBox"},
+    "large-storage-box" => %{"3d_object" => "largeStorageBox"},
+    "inactive-person" => %{"3d_object" => "inactivePerson"}
+  }
+
+  def default_visual_language, do: @default_visual_language
+
   def address_delimiter, do: "/"
 
   @doc """
@@ -630,10 +676,9 @@ defmodule BldgServer.Buildings do
     Map.put(entity, "nesting_depth", depth)
   end
 
-  # TODO get this from config
-
   def add_composite_bldg_metadata(%{"entity_type" => "ground"} = entity) do
-    default_data = %{flr_height: "1.08", flr0_height: "0.01"}
+    vl_entry = @default_visual_language["ground"]
+    default_data = %{flr_height: vl_entry["flr_height"], flr0_height: vl_entry["flr0_height"]}
 
     combined_data =
       case Map.get(entity, "data") do
@@ -643,69 +688,33 @@ defmodule BldgServer.Buildings do
 
     {_, data_json} = JSON.encode(combined_data)
 
+    visual_language = Map.get(entity, "visual_language") || @default_visual_language
+
     entity
     |> Map.put("is_composite", true)
     |> Map.put("data", data_json)
+    |> Map.put("visual_language", visual_language)
   end
 
-  def add_composite_bldg_metadata(%{"entity_type" => "problem"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"1.08\", \"flr0_height\": \"1.11\"}")
-  end
+  def add_composite_bldg_metadata(%{"entity_type" => entity_type} = entity) do
+    case Map.get(@default_visual_language, entity_type) do
+      %{"flr_height" => flr_height, "flr0_height" => flr0_height} ->
+        data = %{flr_height: flr_height, flr0_height: flr0_height}
+        {_, data_json} = JSON.encode(data)
 
-  def add_composite_bldg_metadata(%{"entity_type" => "stage"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.022\"}")
-  end
+        visual_language = Map.get(entity, "visual_language") || @default_visual_language
 
-  def add_composite_bldg_metadata(%{"entity_type" => "green-lot"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.022\"}")
-  end
+        entity
+        |> Map.put("is_composite", true)
+        |> Map.put("data", data_json)
+        |> Map.put("visual_language", visual_language)
 
-  def add_composite_bldg_metadata(%{"entity_type" => "blue-lot"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.022\"}")
-  end
-
-  def add_composite_bldg_metadata(%{"entity_type" => "milestone"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"0.63\", \"flr0_height\": \"0.0\"}")
-  end
-
-  def add_composite_bldg_metadata(%{"entity_type" => "sales"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"3.0\", \"flr0_height\": \"1.3\"}")
-  end
-
-  def add_composite_bldg_metadata(%{"entity_type" => "team"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"0.9\", \"flr0_height\": \"0.05\"}")
-  end
-
-  def add_composite_bldg_metadata(%{"entity_type" => "storage"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"0.7\", \"flr0_height\": \"0.03\"}")
-  end
-
-  def add_composite_bldg_metadata(%{"entity_type" => "costs"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"2.57\", \"flr0_height\": \"0.067\"}")
-  end
-
-  def add_composite_bldg_metadata(%{"entity_type" => "inbox"} = entity) do
-    entity
-    |> Map.put("is_composite", true)
-    |> Map.put("data", "{\"flr_height\": \"2.57\", \"flr0_height\": \"0.067\"}")
+      _ ->
+        case Map.get(entity, "is_composite") do
+          nil -> Map.put(entity, "is_composite", false)
+          _ -> entity
+        end
+    end
   end
 
   def add_composite_bldg_metadata(entity) do

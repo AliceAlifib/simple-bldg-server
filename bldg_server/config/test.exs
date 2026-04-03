@@ -2,7 +2,7 @@ use Mix.Config
 
 # Configure your database
 config :bldg_server, BldgServer.Repo,
-  username: "postgres",
+  username: System.get_env("DB_USER", "postgres"),
   password: System.get_env("DB_PASSWORD", "postgres"),
   database: "bldg_server_test",
   hostname: System.get_env("DB_HOST", "localhost"),

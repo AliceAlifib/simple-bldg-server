@@ -23,6 +23,7 @@ defmodule BldgServer.Buildings.Bldg do
     field(:flr_level, :integer)
     field(:nesting_depth, :integer)
     field(:previous_messages, {:array, :string})
+    field(:visual_language, :map)
 
     timestamps()
   end
@@ -50,7 +51,8 @@ defmodule BldgServer.Buildings.Bldg do
       :flr_url,
       :flr_level,
       :nesting_depth,
-      :previous_messages
+      :previous_messages,
+      :visual_language
     ])
     |> validate_required([
       :bldg_url,
