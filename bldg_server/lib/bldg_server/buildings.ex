@@ -508,6 +508,33 @@ defmodule BldgServer.Buildings do
     end
   end
 
+  @doc """
+  Checks whether the given email is an authorized owner of the building,
+  either directly or via ownership of any ancestor (container) building.
+  Ownership is inherited: if you own a building, you can operate on
+  everything nested inside it.
+  """
+  def is_authorized_owner?(email, %Bldg{} = bldg) do
+    if email in (bldg.owners || []) do
+      true
+    else
+      # Walk up the container chain
+      parent_bldg_url = get_container_flr_url(bldg.bldg_url)
+
+      if parent_bldg_url == bldg.bldg_url or parent_bldg_url == "" do
+        # Reached the root without finding ownership
+        false
+      else
+        case get_by_bldg_url(parent_bldg_url) do
+          nil -> false
+          parent -> is_authorized_owner?(email, parent)
+        end
+      end
+    end
+  end
+
+  def is_authorized_owner?(_email, nil), do: false
+
   # FRAMEWORK
 
   """
