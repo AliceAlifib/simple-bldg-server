@@ -518,22 +518,37 @@ defmodule BldgServer.Buildings do
     if email in (bldg.owners || []) do
       true
     else
-      # Walk up the container chain
-      parent_bldg_url = get_container_flr_url(bldg.bldg_url)
-
-      if parent_bldg_url == bldg.bldg_url or parent_bldg_url == "" do
-        # Reached the root without finding ownership
-        false
-      else
-        case get_by_bldg_url(parent_bldg_url) do
-          nil -> false
-          parent -> is_authorized_owner?(email, parent)
-        end
-      end
+      # Walk up the container chain by bldg_url
+      walk_up_owners(email, bldg.bldg_url)
     end
   end
 
   def is_authorized_owner?(_email, nil), do: false
+
+  # Walk up the bldg_url hierarchy, skipping floors (which aren't in the bldgs table)
+  defp walk_up_owners(_email, ""), do: false
+  defp walk_up_owners(_email, "g"), do: false
+
+  defp walk_up_owners(email, url) do
+    parent_url = get_container(url)
+
+    if parent_url == url or parent_url == "" do
+      false
+    else
+      case get_by_bldg_url(parent_url) do
+        nil ->
+          # Parent is likely a floor (e.g., "g/udi-bauman/l0") — skip and keep walking
+          walk_up_owners(email, parent_url)
+
+        parent ->
+          if email in (parent.owners || []) do
+            true
+          else
+            walk_up_owners(email, parent_url)
+          end
+      end
+    end
+  end
 
   # FRAMEWORK
 
