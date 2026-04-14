@@ -466,6 +466,19 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     raise "Missing required say fields (say_flr_url)- received only: #{received_keys}"
   end
 
+  def execute_command(["/delete", "bldg", name], msg) do
+    flr_url = msg["say_flr_url"]
+    bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
+    bldg = Buildings.get_by_bldg_url(bldg_url)
+
+    if not Buildings.is_authorized_owner?(msg["resident_email"], bldg) do
+      raise "Unauthorized"
+    else
+      Buildings.delete_bldg_cascade(bldg)
+      IO.puts("bldg deleted (cascade): #{bldg_url}")
+    end
+  end
+
   def execute_command(msg_parts, _msg) do
     Logger.info("Ignoring unknown command:")
     IO.inspect(msg_parts)

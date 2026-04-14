@@ -445,6 +445,34 @@ defmodule BldgServer.Buildings do
     Bldg.changeset(bldg, %{})
   end
 
+  @doc """
+  Deletes a bldg and all nested children (cascade).
+  Deletes deepest children first, then roads, then the target bldg.
+  Each deletion broadcasts its own bldg_deleted/road_deleted event.
+  """
+  def delete_bldg_cascade(%Bldg{} = bldg) do
+    # Find all nested child bldgs
+    children = list_all_bldgs_in_flr(bldg.address)
+
+    # Delete deepest children first
+    children
+    |> Enum.sort_by(& &1.nesting_depth, :desc)
+    |> Enum.each(fn child ->
+      # Delete roads on the child's floors
+      BldgServer.Relations.list_all_roads_in_flr(child.address)
+      |> Enum.each(&BldgServer.Relations.delete_road/1)
+
+      delete_bldg(child)
+    end)
+
+    # Delete roads on the target bldg's floors
+    BldgServer.Relations.list_all_roads_in_flr(bldg.address)
+    |> Enum.each(&BldgServer.Relations.delete_road/1)
+
+    # Delete the target bldg itself
+    delete_bldg(bldg)
+  end
+
   defp broadcast_bldg_change({:ok, %Bldg{} = bldg}, event) do
     payload = BldgServerWeb.FloorChannel.serialize_bldg(bldg)
     broadcast_to_floor_and_ancestors(bldg.flr, event, payload)
