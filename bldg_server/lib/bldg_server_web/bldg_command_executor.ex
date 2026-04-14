@@ -39,8 +39,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     flr_url = msg["say_flr_url"]
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
-    # verify that the speaker is also an owner
-    if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+    # verify that the speaker is an owner (directly or via ancestor)
+    if not Buildings.is_authorized_owner?(msg["resident_email"], bldg) do
       raise "Unauthorized"
     else
       Buildings.update_bldg(bldg, %{"owners" => [email | bldg.owners]})
@@ -52,8 +52,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     flr_url = msg["say_flr_url"]
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
-    # verify that the speaker is also an owner
-    if Enum.find(bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+    # verify that the speaker is an owner (directly or via ancestor)
+    if not Buildings.is_authorized_owner?(msg["resident_email"], bldg) do
       raise "Unauthorized"
     else
       pos = Enum.find_index(bldg.owners, fn x -> x == email end)
@@ -76,7 +76,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     # validate that the actor resident/bldg has the sufficient permissions
     container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
 
-    if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+    if not Buildings.is_authorized_owner?(msg["resident_email"], container_bldg) do
       raise "#{msg["resident_email"]} is not authorized to create roads inside #{container_bldg.web_url}"
     else
       # TODO return proper errors
@@ -160,7 +160,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     # validate that the actor resident/bldg has the sufficient permissions
     container_bldg = Buildings.get_flr_bldg(msg["say_flr_url"]) |> Buildings.get_by_bldg_url()
 
-    if Enum.find(container_bldg.owners, fn x -> x == msg["resident_email"] end) == nil do
+    if not Buildings.is_authorized_owner?(msg["resident_email"], container_bldg) do
       raise "#{msg["resident_email"]} is not authorized to create bldgs inside #{container_bldg.web_url}"
     else
       # TODO if creating under a given bldg, send its container_web_url instead of flr
@@ -294,8 +294,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     flr_url = say_flr_url
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
     bldg = Buildings.get_by_bldg_url(bldg_url)
-    # verify that the speaker is also an owner
-    if Enum.find(bldg.owners, fn x -> x == resident_email end) == nil do
+    # verify that the speaker is an owner (directly or via ancestor)
+    if not Buildings.is_authorized_owner?(resident_email, bldg) do
       raise "Unauthorized"
     else
       Buildings.update_bldg(bldg, %{"address" => say_location, "x" => x, "y" => y})
@@ -353,8 +353,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           "flr_level" => Buildings.extract_flr_level(say_flr)
         }
 
-        # verify that the speaker is also an owner
-        if Enum.find(bldg.owners, fn x -> x == resident_email end) == nil do
+        # verify that the speaker is an owner (directly or via ancestor)
+        if not Buildings.is_authorized_owner?(resident_email, bldg) do
           raise "Unauthorized"
         else
           # TODO address may not be exactly the say_location
