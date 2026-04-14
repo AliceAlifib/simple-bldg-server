@@ -74,9 +74,32 @@ All API routes are under `/api/v1/` (see `lib/bldg_server_web/router.ex`):
 
 Deployed to Fly.io (`bldg_server/fly.toml`), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`.
 
+### Ownership & Authorization
+
+- Bldgs and Roads have an `owners` field (array of email strings).
+- `Buildings.is_authorized_owner?/2` checks direct ownership first, then walks up the container hierarchy (via `bldg_url`) to check ancestor ownership — an owner of a parent building can operate on all nested children.
+- Floor segments are skipped when walking up, since floors don't have their own bldg entries.
+- Used by `BldgCommandExecutor` for `/add owner`, `/remove owner`, `/connect` commands and by controllers for mutation authorization.
+
+### Authentication Flow
+
+Passwordless email-based auth:
+1. `POST /residents/login` → creates a Session (status: `PENDING-VERIFICATION`) and emails a magic link via SendGrid
+2. `GET /residents/verify?token=X` → verifies the token (24h max age via `Phoenix.Token`), marks session `VERIFIED`
+3. Sessions track `ip_address` and `last_activity_time`; previous sessions are marked `REPLACED`
+
+### Visual Language
+
+The `visual_language` field (map) on container bldgs decouples `entity_type` from 3D rendering. `Buildings.default_visual_language/0` defines 50+ entity-type-to-3D-object mappings (e.g., `"team"` → `"buildingWithStorefront"`). Containers set this on their floors; child bldgs inherit the mapping to determine their visual representation.
+
+### DGraph Staging
+
+The staging API uses DGraph with DQL queries. The `namespace` concept is stored as `ns` in the DGraph schema (renamed to avoid conflict with DGraph's internal `namespace` keyword). Staging data is organized by `ns` and `entity_type`.
+
 ## Key Conventions
 
 - JSON API only (no HTML views) — all controllers render JSON via view modules in `views/`.
 - Auto-placement logic in `Buildings.create_bldg/1` handles coordinate collision by shifting x+1 and retrying.
 - Composite entity types (e.g., "team", "project") have predefined floor heights in `BldgController`.
 - Building creation triggers hierarchical notifications up the container chain.
+- GenServers (`BldgCommandExecutor`, `BatteryChatDispatcher`) subscribe to Phoenix PubSub "chat" topic — commands are broadcast, not called directly.
