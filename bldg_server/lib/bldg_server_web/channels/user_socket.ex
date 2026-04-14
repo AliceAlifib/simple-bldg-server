@@ -2,7 +2,7 @@ defmodule BldgServerWeb.UserSocket do
   use Phoenix.Socket
 
   ## Channels
-  # channel "room:*", BldgServerWeb.RoomChannel
+  channel "floor:*", BldgServerWeb.FloorChannel
 
   # Socket params are passed from the client and can
   # be used to verify and authenticate a user. After

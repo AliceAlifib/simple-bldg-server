@@ -14,16 +14,21 @@ All commands run from the `bldg_server/` directory:
 mix deps.get              # Install dependencies
 mix ecto.setup            # Create DB, run migrations, seed
 mix ecto.migrate          # Run pending migrations
+mix ecto.reset            # Drop DB, recreate, migrate, seed
 mix phx.server            # Start dev server (HTTP :4000, HTTPS :4443)
 mix test                  # Run all tests
 mix test test/path_test.exs          # Run a single test file
 mix test test/path_test.exs:42       # Run a specific test by line
 ```
 
+The `mix test` alias auto-runs `ecto.create` and `ecto.migrate` before tests (test DB: `bldg_server_test`).
+
 Docker for local dev (starts PostgreSQL):
 ```bash
 docker-compose up
 ```
+
+The app requires `REDIS_HOST`, `REDIS_PWD`, and `REDIS_PORT` env vars at startup (hard-crashes without them). DB config reads `DB_USER`, `DB_PASSWORD`, `DB_HOST` with defaults.
 
 Production release runs migrations via `/app/bin/migrate`.
 
@@ -58,10 +63,11 @@ The hierarchical address is central to the data model:
 - **PostgreSQL** — Primary database (Ecto/postgrex)
 - **Redis** (Upstash in prod) — Caching and pub/sub via Redix
 - **DGraph** — Graph database for staging/transient data queries
+- **Finch** (`FinchClient`) — HTTP client for outbound requests (battery webhooks, DGraph API)
 
 ### API Structure
 
-All API routes are under `/api/v1/` (see `lib/bldg_server_web/router.ex`):
+All API routes are under `/v1/` (see `lib/bldg_server_web/router.ex`):
 - `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing
 - `/residents/*` — Auth (login/verify), resident actions, `look`/`scan`
 - `/roads/*` — Relationship management, `look`/`scan`

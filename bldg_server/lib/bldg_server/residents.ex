@@ -97,9 +97,13 @@ defmodule BldgServer.Residents do
 
   """
   def create_resident(attrs \\ %{}) do
-    %Resident{}
-    |> Resident.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Resident{}
+      |> Resident.changeset(attrs)
+      |> Repo.insert()
+
+    broadcast_resident_change(result, "resident_created")
+    result
   end
 
   @doc """
@@ -115,9 +119,13 @@ defmodule BldgServer.Residents do
 
   """
   def update_resident(%Resident{} = resident, attrs) do
-    resident
-    |> Resident.changeset(attrs)
-    |> Repo.update()
+    result =
+      resident
+      |> Resident.changeset(attrs)
+      |> Repo.update()
+
+    broadcast_resident_change(result, "resident_updated")
+    result
   end
 
   @doc """
@@ -133,7 +141,20 @@ defmodule BldgServer.Residents do
 
   """
   def delete_resident(%Resident{} = resident) do
-    Repo.delete(resident)
+    flr = resident.flr
+    resident_id = resident.id
+    result = Repo.delete(resident)
+
+    case result do
+      {:ok, _} ->
+        if flr do
+          BldgServer.Buildings.broadcast_to_floor_and_ancestors(flr, "resident_deleted", %{id: resident_id})
+        end
+      _ ->
+        :ok
+    end
+
+    result
   end
 
   def start_email_verification(%Resident{} = resident, ip_addr) do
@@ -300,4 +321,13 @@ defmodule BldgServer.Residents do
   def change_resident(%Resident{} = resident) do
     Resident.changeset(resident, %{})
   end
+
+  defp broadcast_resident_change({:ok, %Resident{} = resident}, event) do
+    if resident.flr do
+      payload = BldgServerWeb.FloorChannel.serialize_resident(resident)
+      BldgServer.Buildings.broadcast_to_floor_and_ancestors(resident.flr, event, payload)
+    end
+  end
+
+  defp broadcast_resident_change(_, _), do: :ok
 end
