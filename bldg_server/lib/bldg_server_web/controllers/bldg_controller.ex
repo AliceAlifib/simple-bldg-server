@@ -78,6 +78,15 @@ defmodule BldgServerWeb.BldgController do
     update(conn, %{"address" => address, "bldg" => bldg_params})
   end
 
+  def add_favorite_view_point(conn, %{"address" => address, "view_point" => view_point}) do
+    decoded_address = URI.decode(address)
+    bldg = Buildings.get_bldg!(decoded_address)
+
+    with {:ok, %Bldg{} = updated} <- Buildings.add_favorite_view_point(bldg, view_point) do
+      render(conn, "show.json", bldg: updated)
+    end
+  end
+
   def show_by_bldg_url(conn, %{"bldg_url" => escaped_bldg_url}) do
     bldg_url = URI.decode(escaped_bldg_url)
 

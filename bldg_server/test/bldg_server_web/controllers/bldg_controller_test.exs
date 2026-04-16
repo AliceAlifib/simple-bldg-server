@@ -203,4 +203,39 @@ defmodule BldgServerWeb.BldgControllerTest do
     bldg = fixture(:bldg)
     {:ok, bldg: bldg}
   end
+
+  describe "add_favorite_view_point" do
+    setup [:create_bldg]
+
+    test "appends a view-point and returns the updated list", %{conn: conn} do
+      url = "/v1/bldgs/g/b(1,2)/l0/favorite_view_points"
+
+      vp_a = %{
+        "name" => "Front Door",
+        "address" => "g/b(1,2)/l0",
+        "direction" => 90.0,
+        "size_delta" => 0,
+        "camera_vertical_angle" => -10.0
+      }
+
+      conn = post(conn, url, view_point: vp_a)
+      assert %{"favorite_view_points" => [returned_a]} = json_response(conn, 200)["data"]
+      assert returned_a["name"] == "Front Door"
+      assert returned_a["direction"] == 90.0
+      assert returned_a["size_delta"] == 0
+
+      vp_b = %{
+        "name" => "Desk",
+        "address" => "g/b(1,2)/l0",
+        "direction" => -45.0,
+        "size_delta" => 2,
+        "camera_vertical_angle" => 5.0
+      }
+
+      conn = post(conn, url, view_point: vp_b)
+      assert %{"favorite_view_points" => list} = json_response(conn, 200)["data"]
+      assert length(list) == 2
+      assert Enum.map(list, & &1["name"]) == ["Front Door", "Desk"]
+    end
+  end
 end

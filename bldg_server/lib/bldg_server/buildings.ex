@@ -446,6 +446,25 @@ defmodule BldgServer.Buildings do
   end
 
   @doc """
+  Appends a favorite view-point to a bldg's list.
+
+  `attrs` is a map with string keys: "name", "address", "direction",
+  "size_delta", "camera_vertical_angle".
+  """
+  def add_favorite_view_point(%Bldg{} = bldg, attrs) do
+    view_point = %{
+      "name" => attrs["name"],
+      "address" => attrs["address"],
+      "direction" => attrs["direction"],
+      "size_delta" => attrs["size_delta"],
+      "camera_vertical_angle" => attrs["camera_vertical_angle"]
+    }
+
+    updated = (bldg.favorite_view_points || []) ++ [view_point]
+    update_bldg(bldg, %{favorite_view_points: updated})
+  end
+
+  @doc """
   Deletes a bldg and all nested children (cascade).
   Deletes deepest children first, then roads, then the target bldg.
   Each deletion broadcasts its own bldg_deleted/road_deleted event.

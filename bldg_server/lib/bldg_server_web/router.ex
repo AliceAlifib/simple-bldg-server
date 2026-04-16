@@ -14,6 +14,7 @@ defmodule BldgServerWeb.Router do
     get("/bldgs/scan/:flr", BldgController, :scan)
     post("/bldgs/build", BldgController, :build)
     post("/bldgs/:address/relocate_to/:new_address", BldgController, :relocate)
+    post("/bldgs/:address/favorite_view_points", BldgController, :add_favorite_view_point)
     post("/residents/login", ResidentController, :login)
     get("/residents/verify", ResidentController, :verify_email)
     get("/residents/verification_status", ResidentController, :verification_status)
