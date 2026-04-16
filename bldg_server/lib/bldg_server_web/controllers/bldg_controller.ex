@@ -45,7 +45,7 @@ defmodule BldgServerWeb.BldgController do
   def delete(conn, %{"address" => address}) do
     bldg = Buildings.get_bldg!(address)
 
-    with {:ok, %Bldg{}} <- Buildings.delete_bldg(bldg) do
+    with {:ok, %Bldg{}} <- Buildings.delete_bldg_cascade(bldg) do
       send_resp(conn, :no_content, "")
     end
   end

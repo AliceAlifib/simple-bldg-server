@@ -356,6 +356,7 @@ defmodule BldgServer.Buildings do
       [] ->
         result = Repo.insert(cs)
         notify_bldg_created(result, "bldg_created", created_bldg_ids, triggering_chat_msg)
+        broadcast_bldg_change(result, "bldg_created")
         result
 
       _ ->
@@ -392,10 +393,14 @@ defmodule BldgServer.Buildings do
       |> Bldg.changeset(attrs)
       |> Repo.update()
     else
-      bldg
-      |> Bldg.changeset(attrs)
-      |> Repo.update()
-      |> notify_bldg_updated("bldg_updated", updated_bldg_ids, attrs)
+      result =
+        bldg
+        |> Bldg.changeset(attrs)
+        |> Repo.update()
+        |> notify_bldg_updated("bldg_updated", updated_bldg_ids, attrs)
+
+      broadcast_bldg_change(result, "bldg_updated")
+      result
     end
   end
 
@@ -412,7 +417,19 @@ defmodule BldgServer.Buildings do
 
   """
   def delete_bldg(%Bldg{} = bldg) do
-    Repo.delete(bldg)
+    # Capture flr and id before deletion for the broadcast
+    flr = bldg.flr
+    bldg_id = bldg.id
+    result = Repo.delete(bldg)
+
+    case result do
+      {:ok, _} ->
+        broadcast_to_floor_and_ancestors(flr, "bldg_deleted", %{id: bldg_id})
+      _ ->
+        :ok
+    end
+
+    result
   end
 
   @doc """
@@ -426,6 +443,74 @@ defmodule BldgServer.Buildings do
   """
   def change_bldg(%Bldg{} = bldg) do
     Bldg.changeset(bldg, %{})
+  end
+
+  @doc """
+  Deletes a bldg and all nested children (cascade).
+  Deletes deepest children first, then roads, then the target bldg.
+  Each deletion broadcasts its own bldg_deleted/road_deleted event.
+  """
+  def delete_bldg_cascade(%Bldg{} = bldg) do
+    # Find all nested child bldgs
+    children = list_all_bldgs_in_flr(bldg.address)
+
+    # Delete deepest children first
+    children
+    |> Enum.sort_by(& &1.nesting_depth, :desc)
+    |> Enum.each(fn child ->
+      # Delete roads on the child's floors
+      BldgServer.Relations.list_all_roads_in_flr(child.address)
+      |> Enum.each(&BldgServer.Relations.delete_road/1)
+
+      delete_bldg(child)
+    end)
+
+    # Delete roads on the target bldg's floors
+    BldgServer.Relations.list_all_roads_in_flr(bldg.address)
+    |> Enum.each(&BldgServer.Relations.delete_road/1)
+
+    # Delete the target bldg itself
+    delete_bldg(bldg)
+  end
+
+  defp broadcast_bldg_change({:ok, %Bldg{} = bldg}, event) do
+    payload = BldgServerWeb.FloorChannel.serialize_bldg(bldg)
+    broadcast_to_floor_and_ancestors(bldg.flr, event, payload)
+  end
+
+  defp broadcast_bldg_change(_, _), do: :ok
+
+  @doc """
+  Broadcasts an event to a floor topic and all ancestor floor topics.
+  This ensures clients doing recursive scans (viewing a base floor) receive
+  events from nested floors.
+
+  For example, a change on floor "g/b(1,2)/l0/b(3,4)/l0" broadcasts to:
+  - "floor:g/b(1,2)/l0/b(3,4)/l0"
+  - "floor:g/b(1,2)/l0"
+  - "floor:g"
+  """
+  def broadcast_to_floor_and_ancestors(flr, event, payload) do
+    # Broadcast to the direct floor
+    BldgServerWeb.Endpoint.broadcast!("floor:#{flr}", event, payload)
+
+    # Walk up ancestor floors
+    parts = String.split(flr, address_delimiter())
+    broadcast_ancestor_floors(parts, event, payload)
+  end
+
+  defp broadcast_ancestor_floors(parts, event, payload) when length(parts) <= 1, do: :ok
+
+  defp broadcast_ancestor_floors(parts, event, payload) do
+    # Remove the last 2 segments (bldg + floor) to get to the parent floor
+    # e.g., ["g", "b(1,2)", "l0", "b(3,4)", "l0"] -> ["g", "b(1,2)", "l0"] -> ["g"]
+    parent_parts = Enum.slice(parts, 0, length(parts) - 2)
+    parent_flr = Enum.join(parent_parts, address_delimiter())
+
+    if parent_flr != "" do
+      BldgServerWeb.Endpoint.broadcast!("floor:#{parent_flr}", event, payload)
+      broadcast_ancestor_floors(parent_parts, event, payload)
+    end
   end
 
   # This didn't work - update wasn't really applied

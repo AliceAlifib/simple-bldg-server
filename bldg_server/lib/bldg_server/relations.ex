@@ -72,9 +72,13 @@ defmodule BldgServer.Relations do
 
   """
   def create_road(attrs \\ %{}) do
-    %Road{}
-    |> Road.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Road{}
+      |> Road.changeset(attrs)
+      |> Repo.insert()
+
+    broadcast_road_change(result, "road_created")
+    result
   end
 
   @doc """
@@ -90,9 +94,13 @@ defmodule BldgServer.Relations do
 
   """
   def update_road(%Road{} = road, attrs) do
-    road
-    |> Road.changeset(attrs)
-    |> Repo.update()
+    result =
+      road
+      |> Road.changeset(attrs)
+      |> Repo.update()
+
+    broadcast_road_change(result, "road_updated")
+    result
   end
 
   @doc """
@@ -108,7 +116,18 @@ defmodule BldgServer.Relations do
 
   """
   def delete_road(%Road{} = road) do
-    Repo.delete(road)
+    flr = road.flr
+    road_id = road.id
+    result = Repo.delete(road)
+
+    case result do
+      {:ok, _} ->
+        BldgServer.Buildings.broadcast_to_floor_and_ancestors(flr, "road_deleted", %{id: road_id})
+      _ ->
+        :ok
+    end
+
+    result
   end
 
   @doc """
@@ -123,4 +142,11 @@ defmodule BldgServer.Relations do
   def change_road(%Road{} = road, attrs \\ %{}) do
     Road.changeset(road, attrs)
   end
+
+  defp broadcast_road_change({:ok, %Road{} = road}, event) do
+    payload = BldgServerWeb.FloorChannel.serialize_road(road)
+    BldgServer.Buildings.broadcast_to_floor_and_ancestors(road.flr, event, payload)
+  end
+
+  defp broadcast_road_change(_, _), do: :ok
 end
