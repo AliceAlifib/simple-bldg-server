@@ -44,6 +44,8 @@ defmodule BldgServer.Buildings do
     "agent" => %{"3d_object" => "agent"},
     "battery" => %{"3d_object" => "tv"},
     "ai-chat" => %{"3d_object" => "documentDisplay"},
+    "artifact" => %{"3d_object" => "documentDisplay"},
+    "description" => %{"3d_object" => "whiteboard"},
     "label" => %{"3d_object" => "flag_blue"},
     "yellow-lot" => %{"3d_object" => "yellowLot"},
     "storage-box" => %{"3d_object" => "storageBox"},
@@ -443,6 +445,25 @@ defmodule BldgServer.Buildings do
   """
   def change_bldg(%Bldg{} = bldg) do
     Bldg.changeset(bldg, %{})
+  end
+
+  @doc """
+  Appends a favorite view-point to a bldg's list.
+
+  `attrs` is a map with string keys: "name", "address", "direction",
+  "size_delta", "camera_vertical_angle".
+  """
+  def add_favorite_view_point(%Bldg{} = bldg, attrs) do
+    view_point = %{
+      "name" => attrs["name"],
+      "address" => attrs["address"],
+      "direction" => attrs["direction"],
+      "size_delta" => attrs["size_delta"],
+      "camera_vertical_angle" => attrs["camera_vertical_angle"]
+    }
+
+    updated = (bldg.favorite_view_points || []) ++ [view_point]
+    update_bldg(bldg, %{favorite_view_points: updated})
   end
 
   @doc """

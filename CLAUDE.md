@@ -48,6 +48,7 @@ Production release runs migrations via `/app/bin/migrate`.
 - **DgraphClient** (`lib/bldg_server/dgraph_client.ex`) — Client for the DGraph graph database, used for staging/transient data.
 - **StagingController** — Manages temporary/staged data in the graph DB with namespace/entity_type organization.
 - **Notifications** (`lib/bldg_server/notifications.ex`) — Propagates creation/update events up the container hierarchy.
+- **FloorChannel** (`lib/bldg_server_web/channels/floor_channel.ex`) — Phoenix Channel on `floor:*` topics that streams real-time `bldg_created/updated/deleted`, `resident_*`, and `road_*` events to clients (replaces HTTP polling). Mutations in `Buildings`/`Residents`/`Relations` broadcast to the target floor **and every ancestor floor**, so clients doing recursive `scan` receive nested changes.
 
 ### Address System
 
@@ -68,13 +69,15 @@ The hierarchical address is central to the data model:
 ### API Structure
 
 All API routes are under `/v1/` (see `lib/bldg_server_web/router.ex`):
-- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing
+- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing, `relocate_to`, `favorite_view_points`
 - `/residents/*` — Auth (login/verify), resident actions, `look`/`scan`
 - `/roads/*` — Relationship management, `look`/`scan`
 - `/batteries/*` — Register/unregister, attach/detach, act
 - `/staging/*` — Read/write/query staged data by namespace
 
 `look/:flr` returns direct children of a floor; `scan/:flr` returns all nested descendants.
+
+Bldgs carry a `favorite_view_points` array of named camera poses (`address`, `direction`, `size_delta`, `camera_vertical_angle`); appended via `POST /v1/bldgs/:address/favorite_view_points`.
 
 ## Deployment
 
@@ -109,3 +112,4 @@ The staging API uses DGraph with DQL queries. The `namespace` concept is stored 
 - Composite entity types (e.g., "team", "project") have predefined floor heights in `BldgController`.
 - Building creation triggers hierarchical notifications up the container chain.
 - GenServers (`BldgCommandExecutor`, `BatteryChatDispatcher`) subscribe to Phoenix PubSub "chat" topic — commands are broadcast, not called directly.
+- `Buildings.delete_bldg_cascade/1` deletes nested descendants deepest-first plus their roads before the target; residents inside deleted bldgs are left untouched. `DELETE /v1/bldgs/:address` and the `/delete bldg {name}` chat command both route through it (authorized via `is_authorized_owner?/2`).

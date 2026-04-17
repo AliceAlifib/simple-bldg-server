@@ -37,6 +37,7 @@ defmodule BldgServerWeb.BldgView do
       previous_messages: bldg.previous_messages,
       updated_at: bldg.updated_at,
       data: bldg.data,
-      visual_language: if(bldg.visual_language, do: Jason.encode!(bldg.visual_language), else: nil)}
+      visual_language: if(bldg.visual_language, do: Jason.encode!(bldg.visual_language), else: nil),
+      favorite_view_points: bldg.favorite_view_points || []}
   end
 end
