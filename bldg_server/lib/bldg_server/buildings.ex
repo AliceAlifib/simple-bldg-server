@@ -44,6 +44,8 @@ defmodule BldgServer.Buildings do
     "agent" => %{"3d_object" => "agent"},
     "battery" => %{"3d_object" => "tv"},
     "ai-chat" => %{"3d_object" => "documentDisplay"},
+    "artifact" => %{"3d_object" => "documentDisplay"},
+    "description" => %{"3d_object" => "whiteboard"},
     "label" => %{"3d_object" => "flag_blue"},
     "yellow-lot" => %{"3d_object" => "yellowLot"},
     "storage-box" => %{"3d_object" => "storageBox"},
