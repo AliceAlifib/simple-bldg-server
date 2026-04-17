@@ -466,6 +466,42 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     raise "Missing required say fields (say_flr_url)- received only: #{received_keys}"
   end
 
+  @editable_fields ~w(state summary category picture_url web_url data tags)
+
+  def execute_command(["/edit", name, field, value_head | value_rest], msg) do
+    value = Enum.join([value_head | value_rest], " ")
+    flr_url = msg["say_flr_url"]
+    bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
+    bldg = Buildings.get_by_bldg_url(bldg_url)
+
+    cond do
+      bldg == nil ->
+        raise "Bldg not found: #{bldg_url}"
+
+      field not in @editable_fields ->
+        raise "Field '#{field}' is not editable via chat. Editable fields: #{Enum.join(@editable_fields, ", ")}"
+
+      not Buildings.is_authorized_owner?(msg["resident_email"], bldg) ->
+        raise "Unauthorized"
+
+      true ->
+        Buildings.update_bldg(bldg, %{field => cast_edit_value(field, value)})
+        IO.puts("bldg edited: #{bldg_url} #{field}=#{value}")
+    end
+  end
+
+  def execute_command(["/edit", _name, _field], _msg) do
+    raise "Missing value for /edit - usage: /edit <bldg_name> <field> <value>"
+  end
+
+  defp cast_edit_value("tags", value) do
+    value
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+  end
+
+  defp cast_edit_value(_field, value), do: value
+
   def execute_command(["/delete", "bldg", name], msg) do
     flr_url = msg["say_flr_url"]
     bldg_url = "#{flr_url}#{Buildings.address_delimiter()}#{name}"
