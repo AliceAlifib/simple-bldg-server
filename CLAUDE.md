@@ -69,13 +69,15 @@ The hierarchical address is central to the data model:
 ### API Structure
 
 All API routes are under `/v1/` (see `lib/bldg_server_web/router.ex`):
-- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing
+- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing, `relocate_to`, `favorite_view_points`
 - `/residents/*` — Auth (login/verify), resident actions, `look`/`scan`
 - `/roads/*` — Relationship management, `look`/`scan`
 - `/batteries/*` — Register/unregister, attach/detach, act
 - `/staging/*` — Read/write/query staged data by namespace
 
 `look/:flr` returns direct children of a floor; `scan/:flr` returns all nested descendants.
+
+Bldgs carry a `favorite_view_points` array of named camera poses (`address`, `direction`, `size_delta`, `camera_vertical_angle`); appended via `POST /v1/bldgs/:address/favorite_view_points`.
 
 ## Deployment
 
