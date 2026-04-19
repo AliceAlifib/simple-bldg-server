@@ -174,12 +174,10 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           say_loc -> Buildings.extract_coords(say_loc) |> Buildings.move_from_speaker(-4)
         end
 
-      # if given flr, use it, otherwise construct based on given flr_url (which is required)
-      flr =
-        case Map.get(msg, "say_flr") do
-          nil -> "#{container_bldg.address}/l#{Buildings.extract_flr_level(msg["say_flr_url"])}"
-          say_flr -> say_flr
-        end
+      # Always derive flr from the authoritative container_bldg.address (looked up via
+      # bldg_url above). A client-supplied say_flr can carry stale coord tuples that don't
+      # match the parent's real address, which strands the child as an orphan.
+      flr = "#{container_bldg.address}/l#{Buildings.extract_flr_level(msg["say_flr_url"])}"
 
       updated_location = "#{flr}#{Buildings.address_delimiter()}b(#{x},#{y})"
 
