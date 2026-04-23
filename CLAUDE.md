@@ -81,7 +81,7 @@ Bldgs carry a `favorite_view_points` array of named camera poses (`address`, `di
 
 ## Deployment
 
-Deployed to Fly.io (`bldg_server/fly.toml`), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`.
+Deployed to Fly.io via split dev/prod stacks (`fly.dev.toml`, `fly.prod.toml` at the repo root), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`. Sentry is wired in for error reporting (commit `0341b20`).
 
 ### Ownership & Authorization
 

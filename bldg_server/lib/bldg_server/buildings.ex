@@ -395,11 +395,21 @@ defmodule BldgServer.Buildings do
       |> Bldg.changeset(attrs)
       |> Repo.update()
     else
+      old_address = bldg.address
+      old_flr = bldg.flr
+
       result =
         bldg
         |> Bldg.changeset(attrs)
         |> Repo.update()
         |> notify_bldg_updated("bldg_updated", updated_bldg_ids, attrs)
+
+      case result do
+        {:ok, %Bldg{address: new_address} = updated} when new_address != old_address ->
+          BldgServer.Relations.cascade_bldg_relocation(old_address, old_flr, updated)
+        _ ->
+          :ok
+      end
 
       broadcast_bldg_change(result, "bldg_updated")
       result
