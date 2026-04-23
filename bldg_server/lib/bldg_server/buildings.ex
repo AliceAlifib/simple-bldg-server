@@ -23,8 +23,8 @@ defmodule BldgServer.Buildings do
     "goal" => %{"3d_object" => "livingRoomTable", "flr_height" => "1.08", "flr0_height" => "1.11"},
     "purpose" => %{"3d_object" => "whiteboard"},
     "cantata" => %{"3d_object" => "presentationStand"},
-    "neighborhood" => %{"3d_object" => "trafficSign"},
-    "street" => %{"3d_object" => "streetSign"},
+    "heading" => %{"3d_object" => "trafficSign"},
+    "name" => %{"3d_object" => "streetSign"},
     "construction" => %{"3d_object" => "construction"},
     "age" => %{"3d_object" => "tree"},
     "delivery" => %{"3d_object" => "tree"},
@@ -404,6 +404,8 @@ defmodule BldgServer.Buildings do
         |> Repo.update()
         |> notify_bldg_updated("bldg_updated", updated_bldg_ids, attrs)
 
+      broadcast_bldg_change(result, "bldg_updated")
+
       case result do
         {:ok, %Bldg{address: new_address} = updated} when new_address != old_address ->
           BldgServer.Relations.cascade_bldg_relocation(old_address, old_flr, updated)
@@ -411,7 +413,6 @@ defmodule BldgServer.Buildings do
           :ok
       end
 
-      broadcast_bldg_change(result, "bldg_updated")
       result
     end
   end
