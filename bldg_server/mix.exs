@@ -47,7 +47,9 @@ defmodule BldgServer.MixProject do
       {:finch, "~> 0.7"},
       {:bamboo, "~> 1.7.1"},
       {:bamboo_smtp, "~> 3.1.3"},
-      {:redix, "~> 1.2"}
+      {:redix, "~> 1.2"},
+      {:sentry, "~> 10.2"},
+      {:hackney, "~> 1.20"}
     ]
   end
 

@@ -88,7 +88,7 @@ Deployed to Fly.io (`bldg_server/fly.toml`), primary region SJC. Multi-stage Doc
 - Bldgs and Roads have an `owners` field (array of email strings).
 - `Buildings.is_authorized_owner?/2` checks direct ownership first, then walks up the container hierarchy (via `bldg_url`) to check ancestor ownership — an owner of a parent building can operate on all nested children.
 - Floor segments are skipped when walking up, since floors don't have their own bldg entries.
-- Used by `BldgCommandExecutor` for `/add owner`, `/remove owner`, `/connect` commands and by controllers for mutation authorization.
+- Used by `BldgCommandExecutor` for `/add owner`, `/remove owner`, `/connect`, `/edit`, and `/delete bldg` commands and by controllers for mutation authorization.
 
 ### Authentication Flow
 
