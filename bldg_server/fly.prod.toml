@@ -1,0 +1,50 @@
+# Production Fly.io config for bldg-server-prod (in the alice-in org).
+# Deploy with: fly deploy -c bldg_server/fly.prod.toml
+#
+# Secrets (DB_PASSWORD, DB_USER, REDIS_PASSWORD, REDIS_PWD, SENDGRID_API_KEY,
+# SECRET_KEY_BASE) must be set via `fly secrets set -a bldg-server-prod ...` —
+# NEVER commit them here.
+#
+# The Fly app name is bldg-server-prod because `bldg-server` is already taken
+# globally by the dev app in the personal org. End-users reach prod via the
+# custom domain (update PHX_HOST / APP_HOSTNAME below once DNS is live).
+
+app = 'bldg-server-prod'
+primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+
+[build]
+
+[deploy]
+  release_command = '/app/bin/migrate'
+
+[env]
+  PHX_HOST = 'bldg-server-prod.fly.dev'
+  PORT = '8080'
+  APP_HOSTNAME = 'bldg-server-prod.fly.dev'
+  APP_PORT = '8080'
+  DB_HOST = 'bldg-server-prod-db.internal'
+  DB_NAME = 'bldg_server'
+  DB_PORT = '5432'
+  DB_SSL = 'false'
+  REDIS_HOST = 'fly-bldg-server-prod-redis.upstash.io'
+  REDIS_PORT = 6379
+  DGRAPH_URL = 'https://dgraph-db-prod.fly.dev'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 1000
+    soft_limit = 1000
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
