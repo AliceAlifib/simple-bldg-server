@@ -8,6 +8,12 @@ defmodule BldgServer.Application do
   require Logger
 
   def start(_type, _args) do
+    # Route :logger error/crash events into Sentry. Only attaches when a DSN
+    # is configured — local dev without SENTRY_DSN is a no-op.
+    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+      config: %{metadata: [:file, :line]}
+    })
+
     # Log Redis configuration for debugging
     redis_host = System.fetch_env!("REDIS_HOST")
     redis_password = System.fetch_env!("REDIS_PWD")

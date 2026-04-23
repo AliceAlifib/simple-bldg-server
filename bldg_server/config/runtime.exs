@@ -4,6 +4,15 @@
 # remember to add this file to your .gitignore.
 import Config
 
+# Sentry error reporting — active in any env where SENTRY_DSN is set (prod).
+# No-op when the env var is absent (dev/test), so local work is unaffected.
+config :sentry,
+  dsn: System.get_env("SENTRY_DSN"),
+  environment_name: to_string(config_env()),
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()],
+  tags: %{service: "bldg-server", fly_app: System.get_env("FLY_APP_NAME")}
+
 if config_env() == :prod do
   secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
   app_port = System.fetch_env!("APP_PORT")

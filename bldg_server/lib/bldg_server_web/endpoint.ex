@@ -1,4 +1,5 @@
 defmodule BldgServerWeb.Endpoint do
+  use Sentry.PlugCapture
   use Phoenix.Endpoint, otp_app: :bldg_server
 
   # The session will be stored in the cookie and signed,
