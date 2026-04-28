@@ -81,7 +81,7 @@ Bldgs carry a `favorite_view_points` array of named camera poses (`address`, `di
 
 ## Deployment
 
-Deployed to Fly.io (`bldg_server/fly.toml`), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`.
+Deployed to Fly.io via split dev/prod stacks (`fly.dev.toml`, `fly.prod.toml` at the repo root), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`. Sentry is wired in for error reporting (commit `0341b20`).
 
 ### Ownership & Authorization
 
@@ -113,3 +113,4 @@ The staging API uses DGraph with DQL queries. The `namespace` concept is stored 
 - Building creation triggers hierarchical notifications up the container chain.
 - GenServers (`BldgCommandExecutor`, `BatteryChatDispatcher`) subscribe to Phoenix PubSub "chat" topic — commands are broadcast, not called directly.
 - `Buildings.delete_bldg_cascade/1` deletes nested descendants deepest-first plus their roads before the target; residents inside deleted bldgs are left untouched. `DELETE /v1/bldgs/:address` and the `/delete bldg {name}` chat command both route through it (authorized via `is_authorized_owner?/2`).
+- Roads cache `from_address`/`to_address` and endpoint coordinates at creation. `Buildings.update_bldg/2` diffs the `address` on update and, on change, calls `Relations.cascade_bldg_relocation/3` to rewrite matching endpoints (following the flr when the road lived on the bldg's prior floor) and re-broadcast `road_updated`. Skipping this leaves roads visually dangling at the old position.
