@@ -70,8 +70,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
   # create road between 2 bldgs (using their websites)
   # TODO handle the case where there are multiple bldgs for the same website - check the ones owned by the user in order to resolve
-  def execute_command(["/connect", "between", name1, "and", name2], msg) do
-    # create a road between the given bldgs, inside the given flr
+  def execute_command(["/connect", "between", name1, "and", name2 | rest], msg) do
+    # create a road between the given bldgs, inside the given flr.
+    # Optional tail: `with color <name> and class <highway|road|lane|path>`
+    # (either order; either one alone also valid). Defaults: color=nil,
+    # class="road" — bare `/connect between A and B` renders unchanged.
+
+    {color, road_class} = parse_connect_options(rest)
 
     # validate that the actor resident/bldg has the sufficient permissions
     container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
@@ -99,12 +104,35 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         "from_y" => from_y,
         "to_x" => to_x,
         "to_y" => to_y,
-        "owners" => [msg["resident_email"]]
+        "owners" => [msg["resident_email"]],
+        "color" => color,
+        "road_class" => road_class || "road"
       }
 
       Relations.create_road(road)
     end
   end
+
+  # Parse the optional `with color X and class Y` (or `with class Y and color X`)
+  # tail of a `/connect between A and B` command. Returns {color, class} where
+  # either may be nil if not specified.
+  defp parse_connect_options([]), do: {nil, nil}
+  defp parse_connect_options(["with" | rest]), do: parse_connect_kwargs(rest, nil, nil)
+  defp parse_connect_options(_), do: {nil, nil}
+
+  defp parse_connect_kwargs([], color, klass), do: {color, klass}
+
+  defp parse_connect_kwargs(["color", v | rest], _color, klass),
+    do: parse_connect_kwargs(skip_and(rest), v, klass)
+
+  defp parse_connect_kwargs(["class", v | rest], color, _klass),
+    do: parse_connect_kwargs(skip_and(rest), color, v)
+
+  defp parse_connect_kwargs([_ | rest], color, klass),
+    do: parse_connect_kwargs(rest, color, klass)
+
+  defp skip_and(["and" | rest]), do: rest
+  defp skip_and(rest), do: rest
 
   def fetch_data(data_url) do
     case data_url do
