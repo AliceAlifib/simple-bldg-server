@@ -52,6 +52,9 @@ defmodule BldgServerWeb.FloorChannel do
       tags: bldg.tags,
       summary: bldg.summary,
       picture_url: bldg.picture_url,
+      color: bldg.color,
+      size: bldg.size,
+      variant: bldg.variant,
       owners: bldg.owners,
       previous_messages: bldg.previous_messages,
       updated_at: bldg.updated_at,
@@ -94,7 +97,9 @@ defmodule BldgServerWeb.FloorChannel do
       from_y: road.from_y,
       to_x: road.to_x,
       to_y: road.to_y,
-      owners: road.owners
+      owners: road.owners,
+      color: road.color,
+      road_class: road.road_class
     }
   end
 end

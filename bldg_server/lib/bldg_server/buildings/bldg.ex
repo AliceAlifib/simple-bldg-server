@@ -2,6 +2,8 @@ defmodule BldgServer.Buildings.Bldg do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @sizes ~w(XS S M L XL XXL)
+
   schema "bldgs" do
     field(:address, :string)
     field(:category, :string)
@@ -25,6 +27,9 @@ defmodule BldgServer.Buildings.Bldg do
     field(:previous_messages, {:array, :string})
     field(:visual_language, :map)
     field(:favorite_view_points, {:array, :map}, default: [])
+    field(:color, :string)
+    field(:size, :string)
+    field(:variant, :string)
 
     timestamps()
   end
@@ -54,7 +59,10 @@ defmodule BldgServer.Buildings.Bldg do
       :nesting_depth,
       :previous_messages,
       :visual_language,
-      :favorite_view_points
+      :favorite_view_points,
+      :color,
+      :size,
+      :variant
     ])
     |> validate_required([
       :bldg_url,
@@ -67,6 +75,7 @@ defmodule BldgServer.Buildings.Bldg do
       :flr_level,
       :nesting_depth
     ])
+    |> validate_inclusion(:size, @sizes)
     |> unique_constraint(:address)
     |> unique_constraint(:bldg_url)
   end

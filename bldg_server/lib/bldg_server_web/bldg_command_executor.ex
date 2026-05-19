@@ -70,8 +70,13 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
   # create road between 2 bldgs (using their websites)
   # TODO handle the case where there are multiple bldgs for the same website - check the ones owned by the user in order to resolve
-  def execute_command(["/connect", "between", name1, "and", name2], msg) do
-    # create a road between the given bldgs, inside the given flr
+  def execute_command(["/connect", "between", name1, "and", name2 | rest], msg) do
+    # create a road between the given bldgs, inside the given flr.
+    # Optional tail: `with color <name> and class <highway|road|lane|path>`
+    # (either order; either one alone also valid). Defaults: color=nil,
+    # class="road" — bare `/connect between A and B` renders unchanged.
+
+    {color, road_class} = parse_connect_options(rest)
 
     # validate that the actor resident/bldg has the sufficient permissions
     container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
@@ -99,12 +104,35 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         "from_y" => from_y,
         "to_x" => to_x,
         "to_y" => to_y,
-        "owners" => [msg["resident_email"]]
+        "owners" => [msg["resident_email"]],
+        "color" => color,
+        "road_class" => road_class || "road"
       }
 
       Relations.create_road(road)
     end
   end
+
+  # Parse the optional `with color X and class Y` (or `with class Y and color X`)
+  # tail of a `/connect between A and B` command. Returns {color, class} where
+  # either may be nil if not specified.
+  defp parse_connect_options([]), do: {nil, nil}
+  defp parse_connect_options(["with" | rest]), do: parse_connect_kwargs(rest, nil, nil)
+  defp parse_connect_options(_), do: {nil, nil}
+
+  defp parse_connect_kwargs([], color, klass), do: {color, klass}
+
+  defp parse_connect_kwargs(["color", v | rest], _color, klass),
+    do: parse_connect_kwargs(skip_and(rest), v, klass)
+
+  defp parse_connect_kwargs(["class", v | rest], color, _klass),
+    do: parse_connect_kwargs(skip_and(rest), color, v)
+
+  defp parse_connect_kwargs([_ | rest], color, klass),
+    do: parse_connect_kwargs(rest, color, klass)
+
+  defp skip_and(["and" | rest]), do: rest
+  defp skip_and(rest), do: rest
 
   def fetch_data(data_url) do
     case data_url do
@@ -153,6 +181,9 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         picture_url,
         data_url,
         state,
+        color,
+        size,
+        variant,
         msg
       ) do
     # create a bldg with the given entity-type & name, inside the given flr & bldg
@@ -181,27 +212,38 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
       updated_location = "#{flr}#{Buildings.address_delimiter()}b(#{x},#{y})"
 
-      entity = %{
-        "flr" => flr,
-        "flr_url" => msg["say_flr_url"],
-        "address" => updated_location,
-        "x" => x,
-        "y" => y,
-        "name" => name,
-        "entity_type" => entity_type,
-        "web_url" => web_url,
-        "summary" => summary,
-        "category" => category,
-        "picture_url" => picture_url,
-        "data" => data,
-        "state" => state,
-        "owners" => [msg["resident_email"]]
-      }
+      entity =
+        %{
+          "flr" => flr,
+          "flr_url" => msg["say_flr_url"],
+          "address" => updated_location,
+          "x" => x,
+          "y" => y,
+          "name" => name,
+          "entity_type" => entity_type,
+          "web_url" => web_url,
+          "summary" => summary,
+          "category" => category,
+          "picture_url" => picture_url,
+          "data" => data,
+          "state" => state,
+          "owners" => [msg["resident_email"]]
+        }
+        |> put_if_present("color", color)
+        |> put_if_present("size", size)
+        |> put_if_present("variant", variant)
 
       Buildings.build(entity)
       |> Buildings.create_bldg(msg)
     end
   end
+
+  # Only set the field when the chat command actually supplied a value.
+  # The parser uses "" as the unset sentinel; passing "" through would fail
+  # validate_inclusion on :size and pollute the field needlessly.
+  defp put_if_present(map, _key, ""), do: map
+  defp put_if_present(map, _key, nil), do: map
+  defp put_if_present(map, key, value), do: Map.put(map, key, value)
 
   def execute_command(["/create", entity_type, "bldg", "with" | parameters_tokens], msg) do
     # Initialize variables
@@ -212,60 +254,92 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     picture_url = ""
     data_url = ""
     state = ""
+    color = ""
+    size = ""
+    variant = ""
 
     # Loop through parameters with index
     Enum.with_index(parameters_tokens)
-    |> Enum.reduce({name, web_url, summary, category, picture_url, data_url, state}, fn
-      {"name", i}, acc ->
-        name = Enum.at(parameters_tokens, i + 1)
-        acc = put_elem(acc, 0, name)
-        acc
+    |> Enum.reduce(
+      {name, web_url, summary, category, picture_url, data_url, state, color, size, variant},
+      fn
+        {"name", i}, acc ->
+          name = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 0, name)
+          acc
 
-      {"web_url", i}, acc ->
-        web_url = Enum.at(parameters_tokens, i + 1)
-        acc = put_elem(acc, 1, web_url)
-        acc
+        {"web_url", i}, acc ->
+          web_url = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 1, web_url)
+          acc
 
-      {"summary", i}, acc ->
-        # Get all tokens after summary until next parameter or end
-        summary_tokens =
-          parameters_tokens
-          |> Enum.drop(i + 1)
-          |> Enum.take_while(fn x ->
-            not Enum.member?(
-              ["name", "web_url", "category", "picture_url", "data_url", "state"],
-              x
-            )
-          end)
+        {"summary", i}, acc ->
+          # Get all tokens after summary until next parameter or end
+          summary_tokens =
+            parameters_tokens
+            |> Enum.drop(i + 1)
+            |> Enum.take_while(fn x ->
+              not Enum.member?(
+                [
+                  "name",
+                  "web_url",
+                  "category",
+                  "picture_url",
+                  "data_url",
+                  "state",
+                  "color",
+                  "size",
+                  "variant"
+                ],
+                x
+              )
+            end)
 
-        summary = Enum.join(summary_tokens, " ")
-        acc = put_elem(acc, 2, summary)
-        acc
+          summary = Enum.join(summary_tokens, " ")
+          acc = put_elem(acc, 2, summary)
+          acc
 
-      {"category", i}, acc ->
-        category = Enum.at(parameters_tokens, i + 1)
-        acc = put_elem(acc, 3, category)
-        acc
+        {"category", i}, acc ->
+          category = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 3, category)
+          acc
 
-      {"picture_url", i}, acc ->
-        picture_url = Enum.at(parameters_tokens, i + 1)
-        acc = put_elem(acc, 4, picture_url)
-        acc
+        {"picture_url", i}, acc ->
+          picture_url = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 4, picture_url)
+          acc
 
-      {"data_url", i}, acc ->
-        data_url = Enum.at(parameters_tokens, i + 1)
-        acc = put_elem(acc, 5, data_url)
-        acc
+        {"data_url", i}, acc ->
+          data_url = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 5, data_url)
+          acc
 
-      {"state", i}, acc ->
-        state = Enum.at(parameters_tokens, i + 1)
-        acc = put_elem(acc, 6, state)
-        acc
+        {"state", i}, acc ->
+          state = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 6, state)
+          acc
 
-      _, acc ->
-        acc
-    end)
-    |> then(fn {name, web_url, summary, category, picture_url, data_url, state} ->
+        {"color", i}, acc ->
+          color = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 7, color)
+          acc
+
+        {"size", i}, acc ->
+          size = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 8, size)
+          acc
+
+        {"variant", i}, acc ->
+          variant = Enum.at(parameters_tokens, i + 1)
+          acc = put_elem(acc, 9, variant)
+          acc
+
+        _, acc ->
+          acc
+      end
+    )
+    |> then(fn {name, web_url, summary, category, picture_url, data_url, state, color, size,
+                variant} ->
       create_bldg_from_command(
         entity_type,
         name,
@@ -275,6 +349,9 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         picture_url,
         data_url,
         state,
+        color,
+        size,
+        variant,
         msg
       )
     end)
@@ -464,7 +541,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     raise "Missing required say fields (say_flr_url)- received only: #{received_keys}"
   end
 
-  @editable_fields ~w(state summary category picture_url web_url data tags)
+  @editable_fields ~w(state summary category picture_url web_url data tags color size variant)
 
   def execute_command(["/edit", name, field, value_head | value_rest], msg) do
     value = Enum.join([value_head | value_rest], " ")

@@ -87,5 +87,19 @@ defmodule BldgServer.BuildingsTest do
       bldg = bldg_fixture()
       assert %Ecto.Changeset{} = Buildings.change_bldg(bldg)
     end
+
+    test "create_bldg/1 accepts color, size, and variant" do
+      attrs = Map.merge(@valid_attrs, %{color: "red", size: "L", variant: "compact"})
+      assert {:ok, %Bldg{} = bldg} = Buildings.create_bldg(attrs)
+      assert bldg.color == "red"
+      assert bldg.size == "L"
+      assert bldg.variant == "compact"
+    end
+
+    test "changeset rejects an unknown size" do
+      cs = Bldg.changeset(%Bldg{}, Map.put(@valid_attrs, :size, "XXXL"))
+      refute cs.valid?
+      assert %{size: [_ | _]} = errors_on(cs)
+    end
   end
 end
