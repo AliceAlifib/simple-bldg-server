@@ -14,7 +14,7 @@ defmodule BldgServer.Buildings do
     "stage" => %{"3d_object" => "stage", "flr_height" => "0.9", "flr0_height" => "0.022"},
     "enabler" => %{"3d_object" => "blueLot", "flr_height" => "0.9", "flr0_height" => "0.022"},
     "milestone" => %{"3d_object" => "raceGate", "flr_height" => "0.9", "flr0_height" => "0.022"},
-    "metric" => %{"3d_object" => "car", "flr_height" => "0.9", "flr0_height" => "0.022"},
+    "metric" => %{"3d_object" => "metricDisplay", "flr_height" => "0.9", "flr0_height" => "0.022"},
     "task" => %{"3d_object" => "greenLot", "flr_height" => "0.9", "flr0_height" => "0.022"},
     "team" => %{"3d_object" => "buildingWithStorefront", "flr_height" => "0.9", "flr0_height" => "0.05"},
     "storage" => %{"3d_object" => "storageBuilding", "flr_height" => "0.7", "flr0_height" => "0.03"},
