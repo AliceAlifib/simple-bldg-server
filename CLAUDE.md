@@ -101,6 +101,8 @@ Passwordless email-based auth:
 
 The `visual_language` field (map) on container bldgs decouples `entity_type` from 3D rendering. `Buildings.default_visual_language/0` defines 50+ entity-type-to-3D-object mappings (e.g., `"team"` → `"buildingWithStorefront"`). Containers set this on their floors; child bldgs inherit the mapping to determine their visual representation.
 
+Bldgs also carry purely-presentational styling fields decoupled from semantic state: `color` (free-form token, validated against a palette in the client), `size` (T-shirt: XS/S/M/L/XL/XXL), and `variant`. These were historically overloaded onto `state`/`category`; migration `20260505120100` backfills the split. Roads similarly accept optional `color` and `class` fields for styled overlays.
+
 ### DGraph Staging
 
 The staging API uses DGraph with DQL queries. The `namespace` concept is stored as `ns` in the DGraph schema (renamed to avoid conflict with DGraph's internal `namespace` keyword). Staging data is organized by `ns` and `entity_type`.
