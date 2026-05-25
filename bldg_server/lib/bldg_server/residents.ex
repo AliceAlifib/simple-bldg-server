@@ -274,6 +274,15 @@ defmodule BldgServer.Residents do
     update_resident(resident, changes)
   end
 
+  @doc """
+  Updates the resident's view mode preference. Same broadcast path as the
+  other update actions — the floor topic gets `resident_updated` so other
+  clients of the same user can mirror the new mode in-place.
+  """
+  def change_view_mode(%Resident{} = resident, view_mode) do
+    update_resident(resident, %{view_mode: view_mode})
+  end
+
   def append_message_to_list(msg_list, msg) do
     case msg_list do
       nil -> [msg]

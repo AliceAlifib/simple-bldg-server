@@ -203,4 +203,18 @@ defmodule BldgServerWeb.ResidentController do
     end
   end
 
+  # change_view_mode action — persists the user's bird-eye vs immersive UI
+  # preference. Broadcasts `resident_updated` so other clients of the same
+  # user can mirror the change without a scene reload.
+  def act(conn, %{"resident_email" => email, "action_type" => "change_view_mode", "view_mode" => view_mode}) do
+    resident = Residents.get_resident_by_email!(email)
+
+    with {:ok, %Resident{} = upd_rsdt} <- Residents.change_view_mode(resident, view_mode) do
+      conn
+      |> put_status(:ok)
+      |> put_resp_header("location", Routes.resident_path(conn, :show, upd_rsdt))
+      |> render("show.json", resident: upd_rsdt)
+    end
+  end
+
 end

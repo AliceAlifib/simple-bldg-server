@@ -83,7 +83,8 @@ defmodule BldgServerWeb.FloorChannel do
       nesting_depth: resident.nesting_depth,
       session_id: resident.session_id,
       last_login_at: resident.last_login_at,
-      updated_at: resident.updated_at
+      updated_at: resident.updated_at,
+      view_mode: resident.view_mode
     }
   end
 
