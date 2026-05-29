@@ -257,12 +257,20 @@ defmodule BldgServer.Residents do
     container_flr = Buildings.get_container_flr(address)
     container_flr_url = Buildings.get_container_flr_url(bldg_url)
 
-    # # determine the location next to the door of the bldg exited
-    # {x, y} = Buildings.extract_coords(address)
-    # new_x = x
-    # new_y = y + 2
-    new_x = post_exit_x
-    new_y = post_exit_y
+    # When the client doesn't supply a meaningful post-exit position (0/nil),
+    # derive the landing spot from the exited bldg's own coords so the player
+    # lands next to the bldg instead of at the floor origin. Honor explicit
+    # non-zero coords as-is.
+    {new_x, new_y} =
+      case {post_exit_x, post_exit_y} do
+        {x, y} when x in [0, nil] and y in [0, nil] ->
+          {bx, by} = Buildings.extract_coords(address)
+          {bx, by + 2}
+
+        {x, y} ->
+          {x, y}
+      end
+
     nesting_depth = calculate_nesting_depth_from_address(container_flr)
 
     changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y, nesting_depth: nesting_depth}
