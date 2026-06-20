@@ -31,9 +31,12 @@ defmodule BldgServerWeb.BldgCommandExecutorTest do
     "owners" => [@owner_email]
   }
 
+  # Insert the bldg directly (factory) rather than via Buildings.create_bldg/1,
+  # whose notify cascade broadcasts chat commands handled asynchronously by the
+  # BldgCommandExecutor GenServer (no sandbox access). The /edit tests only need
+  # a bldg to exist; they don't exercise the create path.
   defp create_bldg(attrs \\ %{}) do
-    {:ok, bldg} = Buildings.create_bldg(Map.merge(@create_attrs, attrs))
-    bldg
+    bldg(Map.merge(@create_attrs, attrs))
   end
 
   defp msg(overrides \\ %{}) do
@@ -44,6 +47,13 @@ defmodule BldgServerWeb.BldgCommandExecutorTest do
       },
       overrides
     )
+  end
+
+  # Editing a bldg on "g" notifies up to the container floor, which looks up the
+  # ground bldg — seed it so that lookup succeeds.
+  setup do
+    seed_ground_floor()
+    :ok
   end
 
   describe "/edit command" do

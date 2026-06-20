@@ -60,7 +60,10 @@ defmodule BldgServerWeb.FloorChannel do
       updated_at: bldg.updated_at,
       data: bldg.data,
       visual_language:
-        if(bldg.visual_language, do: Jason.encode!(bldg.visual_language), else: nil)
+        if(bldg.visual_language, do: Jason.encode!(bldg.visual_language), else: nil),
+      # Keep parity with BldgView.render("bldg.json"): a channel scan must carry
+      # favorite_view_points too, or clients hydrating from the channel lose them.
+      favorite_view_points: bldg.favorite_view_points || []
     }
   end
 
