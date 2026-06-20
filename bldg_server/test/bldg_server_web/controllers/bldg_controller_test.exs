@@ -4,13 +4,14 @@ defmodule BldgServerWeb.BldgControllerTest do
   alias BldgServer.Buildings
   alias BldgServer.Buildings.Bldg
 
-  alias BldgServerWeb.BldgController
-
 
   @create_attrs %{
     address: "g/b(1,2)/l0",
+    bldg_url: "g/b(1,2)/l0",
+    flr_level: 0,
+    nesting_depth: 1,
     category: "some category",
-    data: %{},
+    data: "some data",
     entity_type: "some entity_type",
     flr: "some flr",
     is_composite: true,
@@ -26,7 +27,7 @@ defmodule BldgServerWeb.BldgControllerTest do
   @update_attrs %{
     address: "g/b(5,6)/l0",
     category: "some updated category",
-    data: %{},
+    data: "some updated data",
     entity_type: "some updated entity_type",
     flr: "some updated flr",
     is_composite: false,
@@ -68,7 +69,7 @@ defmodule BldgServerWeb.BldgControllerTest do
                "id" => id,
                "address" => "g/b(1,2)/l0",
                "category" => "some category",
-               "data" => %{},
+               "data" => "some data",
                "entity_type" => "some entity_type",
                "flr" => "some flr",
                "is_composite" => true,
@@ -92,21 +93,19 @@ defmodule BldgServerWeb.BldgControllerTest do
   describe "update bldg" do
     setup [:create_bldg]
 
-    test "renders bldg when data is valid", %{conn: conn, bldg: %Bldg{address: address} = bldg} do
-      # TODO bldg_path doesn't return the right URL: it doesn't use the address instead of the id
-      #conn = put(conn, Routes.bldg_path(conn, :update, bldg), bldg: @update_attrs)
-      url = "/v1/bldgs/g/b(1,2)/l0"
-      conn = put(conn, url, bldg: @update_attrs)
+    test "renders bldg when data is valid", %{conn: conn, bldg: %Bldg{address: address}} do
+      # :address is a single path segment, so the address must be percent-encoded
+      # (Routes.bldg_path does this); a raw "g/b(1,2)/l0" path 404s.
+      conn = put(conn, Routes.bldg_path(conn, :update, address), bldg: @update_attrs)
       assert %{"address" => "g/b(5,6)/l0"} = json_response(conn, 200)["data"]
 
-      new_url = "/v1/bldgs/g/b(5,6)/l0"
-      conn = get(conn, new_url)
+      conn = get(conn, Routes.bldg_path(conn, :show, "g/b(5,6)/l0"))
 
       assert %{
                "id" => id,
                "address" => "g/b(5,6)/l0",
                "category" => "some updated category",
-               "data" => %{},
+               "data" => "some updated data",
                "entity_type" => "some updated entity_type",
                "flr" => "some updated flr",
                "is_composite" => false,
@@ -121,11 +120,8 @@ defmodule BldgServerWeb.BldgControllerTest do
              } = json_response(conn, 200)["data"]
     end
 
-    test "renders errors when data is invalid", %{conn: conn, bldg: bldg} do
-      # TODO bldg_path doesn't return the right URL: it doesn't use the address instead of the id
-      #conn = put(conn, Routes.bldg_path(conn, :update, bldg), bldg: @invalid_attrs)
-      url = "/v1/bldgs/g/b(1,2)/l0"
-      conn = put(conn, url, bldg: @invalid_attrs)
+    test "renders errors when data is invalid", %{conn: conn, bldg: %Bldg{address: address}} do
+      conn = put(conn, Routes.bldg_path(conn, :update, address), bldg: @invalid_attrs)
       assert json_response(conn, 422)["errors"] != %{}
     end
   end
@@ -133,15 +129,12 @@ defmodule BldgServerWeb.BldgControllerTest do
   describe "delete bldg" do
     setup [:create_bldg]
 
-    test "deletes chosen bldg", %{conn: conn, bldg: bldg} do
-      # TODO bldg_path doesn't return the right URL: it doesn't use the address instead of the id
-      #conn = delete(conn, Routes.bldg_path(conn, :delete, bldg))
-      url = "/v1/bldgs/g/b(1,2)/l0"
-      conn = delete(conn, url)
+    test "deletes chosen bldg", %{conn: conn, bldg: %Bldg{address: address}} do
+      conn = delete(conn, Routes.bldg_path(conn, :delete, address))
       assert response(conn, 204)
 
       assert_error_sent 404, fn ->
-        get(conn, Routes.bldg_path(conn, :show, bldg))
+        get(conn, Routes.bldg_path(conn, :show, address))
       end
     end
   end
@@ -150,7 +143,7 @@ defmodule BldgServerWeb.BldgControllerTest do
     
     test "returns min location" do
       locations = [{2,1}, {3,4}, {1,2}, {5,6}, {1,1}, {1,3}]
-      result = BldgController.get_minimal_location(locations)
+      result = Buildings.get_minimal_location(locations)
       assert result == {1,1}
     end
 
@@ -165,7 +158,7 @@ defmodule BldgServerWeb.BldgControllerTest do
       max_y = 12
       locations = [{2,1}, {3,4}, {3,1}, {5,6}, {4,1}]
       start_location = {2,1}
-      result = BldgController.get_next_available_location(locations, start_location, max_x, max_y)
+      result = Buildings.get_next_available_location(locations, start_location, max_x, max_y)
       assert {5,1} == result
     end
 
@@ -174,7 +167,7 @@ defmodule BldgServerWeb.BldgControllerTest do
       max_y = 12
       locations = [{1,1}, {2,1}, {4,1}]
       start_location = {1,1}
-      result = BldgController.get_next_available_location(locations, start_location, max_x, max_y)
+      result = Buildings.get_next_available_location(locations, start_location, max_x, max_y)
       assert {3,1} == result
     end
 
@@ -183,7 +176,7 @@ defmodule BldgServerWeb.BldgControllerTest do
       max_y = 12
       locations = [{10,11}, {9,11}]
       start_location = {9,11}
-      result = BldgController.get_next_available_location(locations, start_location, max_x, max_y)
+      result = Buildings.get_next_available_location(locations, start_location, max_x, max_y)
       assert {11,11} == result
     end
 
@@ -192,7 +185,7 @@ defmodule BldgServerWeb.BldgControllerTest do
       max_y = 12
       locations = [{14,5}, {15,5}, {16,5}]
       start_location = {14,5}
-      result = BldgController.get_next_available_location(locations, start_location, max_x, max_y)
+      result = Buildings.get_next_available_location(locations, start_location, max_x, max_y)
       assert {14,6} == result
     end
 
@@ -208,7 +201,8 @@ defmodule BldgServerWeb.BldgControllerTest do
     setup [:create_bldg]
 
     test "appends a view-point and returns the updated list", %{conn: conn} do
-      url = "/v1/bldgs/g/b(1,2)/l0/favorite_view_points"
+      # :address is a single path segment — percent-encode the slashes.
+      url = "/v1/bldgs/#{URI.encode_www_form("g/b(1,2)/l0")}/favorite_view_points"
 
       vp_a = %{
         "name" => "Front Door",

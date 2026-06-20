@@ -86,9 +86,14 @@ defmodule BldgServer.Buildings do
     # If include_parent is false, we set parent_addr to nil.
     parent_addr = if include_parent, do: get_flr_bldg(flr), else: ""
 
+    # Delimiter-safe: match the floor exactly (direct children) or a strict
+    # sub-path ("flr/..."). A bare "flr%" prefix would also match a numerically-
+    # prefixed sibling floor (e.g. ".../l1" wrongly matching ".../l10").
     q =
       from(b in Bldg,
-        where: like(b.flr, ^"#{flr}%") or (^include_parent and b.address == ^parent_addr)
+        where:
+          b.flr == ^flr or like(b.flr, ^"#{flr}/%") or
+            (^include_parent and b.address == ^parent_addr)
       )
 
     bldgs = Repo.all(q)
@@ -189,13 +194,10 @@ defmodule BldgServer.Buildings do
       # Extract and modify coordinates for retry
       case triggering_chat_msg do
         %{"say_location" => location} = msg when is_binary(location) ->
-          {x, y} = extract_coords(location)
-          # Try moving the location slightly to avoid collision
-          # Shift by -1, 0, or 1
-          new_x = x + :rand.uniform(3) - 1
-          # Shift by -1, 0, or 1
-          new_y = y + :rand.uniform(3) - 1
-          new_location = String.replace(location, "b(#{x},#{y})", "b(#{new_x},#{new_y})")
+          # Jitter the last segment's coords (clamped >= 0), rewriting only that
+          # segment — not the first textual match — to avoid corrupting an
+          # ancestor segment sharing the same coords.
+          new_location = jitter_bldg_location(location)
           new_msg = Map.put(msg, "say_location", new_location)
           IO.puts("~~~~~ Retrying with new location: #{new_location} (moved from #{location})")
 
@@ -253,17 +255,19 @@ defmodule BldgServer.Buildings do
 
   def notify_bldg_created({:ok, created_bldg}, action, subject, triggering_chat_msg) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url, owners: owners} =
+    %BldgServer.Buildings.Bldg{name: name, address: address, flr: container_flr, flr_url: container_flr_url, owners: owners} =
       created_bldg
 
-    resident_email = List.first(owners) || "bldg_server"
+    resident_email = List.first(owners || []) || "bldg_server"
 
     IO.puts("~~~~~ at notify_bldg_created - SUCCESS: #{name}")
     container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
 
-    if container_addr != "" do
-      # TODO handle the case where the container is g
+    # Stop at the root: the ground floor sits on itself (flr "g" -> container_addr
+    # "g", which equals its own address), so without the `!= address` guard the
+    # walk recurses into the ground floor forever.
+    if container_addr != "" and container_addr != address do
       container = get_bldg!(container_addr)
 
       msg = %{
@@ -286,25 +290,27 @@ defmodule BldgServer.Buildings do
     end
   end
 
-  def notify_bldg_updated({:error, _}, _, subject, _) do
-    # notification parameters
-    # %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url} = created_bldg
+  def notify_bldg_updated({:error, _} = error_result, _, subject, _) do
     IO.puts("~~~~~ at notify_bldg_updated - FAILURE: #{subject}")
+    # Pass the error changeset through so update_bldg/2 preserves the
+    # {:error, changeset} contract instead of returning the IO.puts result.
+    error_result
   end
 
   def notify_bldg_updated({:ok, updated_bldg} = update_result, action, subject, attrs) do
     # notification parameters
-    %BldgServer.Buildings.Bldg{name: name, flr: container_flr, flr_url: container_flr_url, owners: owners} =
+    %BldgServer.Buildings.Bldg{name: name, address: address, flr: container_flr, flr_url: container_flr_url, owners: owners} =
       updated_bldg
 
-    resident_email = List.first(owners) || "bldg_server"
+    resident_email = List.first(owners || []) || "bldg_server"
 
     IO.puts("~~~~~ at notify_bldg_updated #{action} - SUCCESS: #{name}")
     container_addr = if container_flr == "g", do: "g", else: get_container(container_flr)
     IO.puts("~~~~ container_addr: #{inspect(container_addr)}")
 
-    if container_addr != "" do
-      # TODO handle the case where the container is g
+    # Stop at the root: see notify_bldg_created/4 — guard against the ground
+    # floor (container_addr == its own address) to avoid infinite recursion.
+    if container_addr != "" and container_addr != address do
       container = get_bldg!(container_addr)
 
       msg = %{
@@ -363,8 +369,11 @@ defmodule BldgServer.Buildings do
         result
 
       _ ->
+        # Return the invalid changeset (the conventional Ecto contract) instead
+        # of raising, so callers like BldgController.create/2 — which already
+        # pattern-match {:error, _} — can render a 422 rather than 500.
         Logger.error("Failed to prepare bldg for writing to database: #{inspect(cs.errors)}")
-        raise "Failed to prepare bldg for writing to database"
+        {:error, cs}
     end
   end
 
@@ -631,7 +640,7 @@ defmodule BldgServer.Buildings do
   everything nested inside it.
   """
   def is_authorized_owner?(email, %Bldg{} = bldg) do
-    if email in (bldg.owners || []) do
+    if owner_match?(email, bldg.owners) do
       true
     else
       # Walk up the container chain by bldg_url
@@ -640,6 +649,20 @@ defmodule BldgServer.Buildings do
   end
 
   def is_authorized_owner?(_email, nil), do: false
+
+  # Email ownership is matched case-insensitively and whitespace-trimmed:
+  # mailbox auth (magic link) makes "A@x.com" and "a@x.com" the same recipient,
+  # so the check must not be bypassable by — nor falsely deny on — casing or a
+  # stray trailing space in either the claimed email or a stored owner entry.
+  defp owner_match?(nil, _owners), do: false
+
+  defp owner_match?(email, owners) do
+    normalized = normalize_email(email)
+    normalized != "" and Enum.any?(owners || [], &(normalize_email(&1) == normalized))
+  end
+
+  defp normalize_email(nil), do: ""
+  defp normalize_email(email), do: email |> String.trim() |> String.downcase()
 
   # Walk up the bldg_url hierarchy, skipping floors (which aren't in the bldgs table)
   defp walk_up_owners(_email, ""), do: false
@@ -657,7 +680,7 @@ defmodule BldgServer.Buildings do
           walk_up_owners(email, parent_url)
 
         parent ->
-          if email in (parent.owners || []) do
+          if owner_match?(email, parent.owners) do
             true
           else
             walk_up_owners(email, parent_url)
@@ -771,22 +794,68 @@ defmodule BldgServer.Buildings do
   def get_next_available_location(locations, start_location, max_x, max_y) do
     {x, y} = start_location
 
-    Enum.reduce_while(y..max_y, nil, fn y, _ ->
-      options = for i <- x..max_x, do: {i, y}
-      whats_available = Enum.map(options, fn loc -> Enum.member?(locations, loc) end)
-      pos = Enum.find_index(whats_available, fn b -> !b end)
+    found =
+      Enum.reduce_while(y..max_y, nil, fn y, _ ->
+        options = for i <- x..max_x, do: {i, y}
+        whats_available = Enum.map(options, fn loc -> Enum.member?(locations, loc) end)
+        pos = Enum.find_index(whats_available, fn b -> !b end)
 
-      case pos do
-        nil -> {:cont, nil}
-        _ -> {:halt, Enum.at(options, pos)}
-      end
-    end)
+        case pos do
+          nil -> {:cont, nil}
+          _ -> {:halt, Enum.at(options, pos)}
+        end
+      end)
+
+    case found do
+      nil ->
+        # The up-and-right grid from the cluster's minimal corner is full.
+        # Documented fallback (step 5): place one column to the left of the
+        # cluster, clamped to >= 0. Returns nil only when there is truly no room
+        # (start column already at 0); callers must handle nil rather than crash.
+        if x > 0, do: {x - 1, y}, else: nil
+
+      loc ->
+        loc
+    end
   end
 
   def get_next_location(similar_bldgs, max_x, max_y) do
     locations = get_locations_map(similar_bldgs)
     start_location = get_minimal_location(locations)
     get_next_available_location(locations, start_location, max_x, max_y)
+  end
+
+  defp random_location(max_x, max_y) do
+    {:rand.uniform(max_x - 1) + 1, :rand.uniform(max_y - 1) + 1}
+  end
+
+  @doc """
+  Replaces the coordinates of the *last* bldg segment of an address.
+
+  The bldg's own coords are always the final `b(x,y)` segment, so we target it
+  by position rather than by `String.replace/3`, which would rewrite the first
+  textual match — corrupting an ancestor segment that happens to share the same
+  coords (e.g. `g/b(5,5)/l0/b(5,5)`).
+  """
+  def replace_bldg_coords(address, new_x, new_y) do
+    address
+    |> String.split(address_delimiter())
+    |> List.replace_at(-1, "b(#{new_x},#{new_y})")
+    |> Enum.join(address_delimiter())
+  end
+
+  @doc """
+  Computes a jittered location for collision-retry: shifts the last segment's
+  coords by -1, 0, or +1 on each axis, clamped to >= 0, and rewrites only that
+  segment. Returns the new address string.
+  """
+  def jitter_bldg_location(location) do
+    {x, y} = extract_coords(location)
+    # :rand.uniform(3) is 1..3, so (… - 2) gives a symmetric -1/0/+1 shift
+    # (the original `- 1` only ever shifted right/up by 0/1/2).
+    new_x = max(x + :rand.uniform(3) - 2, 0)
+    new_y = max(y + :rand.uniform(3) - 2, 0)
+    replace_bldg_coords(location, new_x, new_y)
   end
 
   def decide_on_location(entity) do
@@ -804,8 +873,14 @@ defmodule BldgServer.Buildings do
 
         {x, y} =
           case similar_bldgs do
-            [] -> {:rand.uniform(max_x - 1) + 1, :rand.uniform(max_y - 1) + 1}
-            _ -> get_next_location(similar_bldgs, max_x, max_y)
+            [] ->
+              random_location(max_x, max_y)
+
+            _ ->
+              # A full floor yields nil; fall back to a random slot and let the
+              # unique-address constraint + create retry resolve any collision,
+              # rather than crashing on a {x,y} = nil match.
+              get_next_location(similar_bldgs, max_x, max_y) || random_location(max_x, max_y)
           end
 
         Map.merge(entity, %{

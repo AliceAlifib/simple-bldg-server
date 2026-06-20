@@ -15,15 +15,13 @@ defmodule BldgServerWeb.BldgController do
     IO.puts("~~~ create")
     IO.inspect(bldg_params)
 
-    case Buildings.create_bldg(bldg_params) do
-      {:ok, %Bldg{} = bldg} ->
-        conn
-        |> put_status(:created)
-        |> put_resp_header("location", Routes.bldg_path(conn, :show, bldg))
-        |> render("show.json", bldg: bldg)
-
-      {:error, error_message} ->
-        IO.puts(error_message)
+    # Let the action_fallback render 422 for {:error, changeset}; previously the
+    # error branch only IO.puts'd and returned a non-conn, crashing the request.
+    with {:ok, %Bldg{} = bldg} <- Buildings.create_bldg(bldg_params) do
+      conn
+      |> put_status(:created)
+      |> put_resp_header("location", Routes.bldg_path(conn, :show, bldg))
+      |> render("show.json", bldg: bldg)
     end
   end
 

@@ -37,8 +37,10 @@ defmodule BldgServer.Relations do
   Returns empty list if no such road exists.
   """
   def list_all_roads_in_flr(flr) do
+    # Delimiter-safe: exact floor or a strict sub-path, so ".../l1" doesn't also
+    # match ".../l10". See Buildings.list_all_bldgs_in_flr/2.
     q = from r in Road,
-        where: like(r.flr, ^"#{flr}%")
+        where: r.flr == ^flr or like(r.flr, ^"#{flr}/%")
     Repo.all(q)
   end
 
