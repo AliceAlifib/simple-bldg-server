@@ -44,8 +44,10 @@ defmodule BldgServer.Residents do
   Returns empty list if no such resident exists.
   """
   def list_all_residents_in_flr(flr) do
+    # Delimiter-safe: exact floor or a strict sub-path, so ".../l1" doesn't also
+    # match ".../l10". See Buildings.list_all_bldgs_in_flr/2.
     q = from r in Resident,
-        where: like(r.flr, ^"#{flr}%")
+        where: r.flr == ^flr or like(r.flr, ^"#{flr}/%")
     Repo.all(q)
   end
 
@@ -288,7 +290,16 @@ defmodule BldgServer.Residents do
   clients of the same user can mirror the new mode in-place.
   """
   def change_view_mode(%Resident{} = resident, view_mode) do
-    update_resident(resident, %{view_mode: view_mode})
+    # Enforce the bird-eye invariant at runtime (it was previously only set by a
+    # one-time migration): bird-eye residents always face 180. Other modes leave
+    # the direction untouched.
+    changes =
+      case view_mode do
+        "bird_eye" -> %{view_mode: view_mode, direction: 180}
+        _ -> %{view_mode: view_mode}
+      end
+
+    update_resident(resident, changes)
   end
 
   def append_message_to_list(msg_list, msg) do
