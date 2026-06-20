@@ -22,6 +22,7 @@ defmodule BldgServerWeb.ConnCase do
       # Import conveniences for testing with connections
       use Phoenix.ConnTest
       alias BldgServerWeb.Router.Helpers, as: Routes
+      import BldgServer.Factory
 
       # The default endpoint for testing
       @endpoint BldgServerWeb.Endpoint

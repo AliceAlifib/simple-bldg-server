@@ -1,0 +1,13 @@
+{
+  "skip_files": [
+    "test/",
+    "priv/repo/migrations/",
+    "lib/bldg_server_web/views/",
+    "lib/bldg_server_web/telemetry.ex",
+    "lib/bldg_server_web/endpoint.ex",
+    "lib/bldg_server/application.ex"
+  ],
+  "coverage_options": {
+    "treat_no_relevant_lines_as_covered": true
+  }
+}

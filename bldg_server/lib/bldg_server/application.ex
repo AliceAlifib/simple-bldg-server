@@ -39,7 +39,11 @@ defmodule BldgServer.Application do
       {Redix,
        [
          host: redis_host,
-         password: redis_password,
+         # Treat a blank REDIS_PWD as "no auth" so the client doesn't send
+         # `AUTH ""` (which a password-less Redis rejects). Prod sets a real
+         # password, so its behavior is unchanged; this only helps the common
+         # password-less local/CI Redis used by the test suite.
+         password: if(redis_password in [nil, ""], do: nil, else: redis_password),
          port: String.to_integer(redis_port),
          socket_opts: [:inet6],
          name: :redix
