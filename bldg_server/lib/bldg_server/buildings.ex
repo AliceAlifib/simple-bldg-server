@@ -407,6 +407,7 @@ defmodule BldgServer.Buildings do
     else
       old_address = bldg.address
       old_flr = bldg.flr
+      old_bldg_url = bldg.bldg_url
 
       result =
         bldg
@@ -418,6 +419,9 @@ defmodule BldgServer.Buildings do
 
       case result do
         {:ok, %Bldg{address: new_address} = updated} when new_address != old_address ->
+          # Re-home every nested descendant onto the moved subtree, then fix up
+          # roads connected to the container itself.
+          relocate_bldg_cascade(old_address, old_bldg_url, updated)
           BldgServer.Relations.cascade_bldg_relocation(old_address, old_flr, updated)
         _ ->
           :ok
@@ -513,6 +517,63 @@ defmodule BldgServer.Buildings do
 
     # Delete the target bldg itself
     delete_bldg(bldg)
+  end
+
+  @doc """
+  Re-homes every nested descendant of a relocated container.
+
+  When a container bldg moves (`old_address`/`old_bldg_url` -> the moved bldg's
+  new address/bldg_url), each descendant's `address`/`flr` is rebased on the new
+  *address* root and its `bldg_url`/`flr_url` on the new *bldg_url* root (the two
+  hierarchies differ when the container is name-aliased). Roads on descendant
+  floors have their `flr`/`from_address`/`to_address` rebased too — their endpoint
+  coords are floor-local and so are preserved. Everything is updated directly (no
+  re-cascade) and re-broadcast on its new floor.
+  """
+  def relocate_bldg_cascade(old_address, old_bldg_url, %Bldg{} = moved) do
+    old_addr_root = BldgServer.Address.parse!(old_address)
+    new_addr_root = BldgServer.Address.parse!(moved.address)
+    old_url_root = BldgServer.Address.parse!(old_bldg_url)
+    new_url_root = BldgServer.Address.parse!(moved.bldg_url)
+
+    old_address
+    |> list_all_bldgs_in_flr()
+    |> Enum.each(fn d ->
+      attrs = %{
+        "address" => rebase_segment(d.address, old_addr_root, new_addr_root),
+        "flr" => rebase_segment(d.flr, old_addr_root, new_addr_root),
+        "bldg_url" => rebase_segment(d.bldg_url, old_url_root, new_url_root),
+        "flr_url" => rebase_segment(d.flr_url, old_url_root, new_url_root)
+      }
+
+      d
+      |> Bldg.changeset(attrs)
+      |> Repo.update()
+      |> broadcast_bldg_change("bldg_updated")
+    end)
+
+    # Roads on descendant floors: rebase the floor + endpoint addresses (all
+    # address-based); from_x/from_y/to_x/to_y are floor-local and unchanged.
+    old_address
+    |> BldgServer.Relations.list_all_roads_in_flr()
+    |> Enum.each(fn road ->
+      attrs = %{
+        "flr" => rebase_segment(road.flr, old_addr_root, new_addr_root),
+        "from_address" => rebase_segment(road.from_address, old_addr_root, new_addr_root),
+        "to_address" => rebase_segment(road.to_address, old_addr_root, new_addr_root)
+      }
+
+      BldgServer.Relations.update_road(road, attrs)
+    end)
+  end
+
+  # Rebase a single address/url string under a moved root, leaving it untouched
+  # if it doesn't actually sit under that root.
+  defp rebase_segment(str, from_root, to_root) do
+    case BldgServer.Address.rebase(BldgServer.Address.parse!(str), from_root, to_root) do
+      :error -> str
+      rebased -> BldgServer.Address.to_string(rebased)
+    end
   end
 
   defp broadcast_bldg_change({:ok, %Bldg{} = bldg}, event) do
