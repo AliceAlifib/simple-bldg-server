@@ -572,27 +572,17 @@ defmodule BldgServer.Buildings do
   # UTILS
 
   def extract_coords(addr) do
-    # get the coords from the last part of the address: "g/b(17,24)/l0/b(-11,6)" -> ["-11","6]
-    [x_s, y_s] =
-      addr
-      |> String.split(address_delimiter())
-      |> List.last()
-      |> String.slice(2..-2)
-      |> String.split(",")
-
-    {{x, ""}, {y, ""}} = {Integer.parse(x_s), Integer.parse(y_s)}
+    # Delegates to the parsed Address. The {x, y} match preserves the historical
+    # raise-on-malformed contract: a non-bldg-terminated address has no coords.
+    {x, y} = BldgServer.Address.coords(BldgServer.Address.parse!(addr))
     {x, y}
   end
 
   def extract_flr_level(flr) do
-    l_s =
-      case flr do
-        "g" -> "0"
-        _ -> flr |> String.split(address_delimiter()) |> List.last() |> String.slice(1..-1)
-      end
-
-    {level, ""} = Integer.parse(l_s)
-    level
+    case BldgServer.Address.floor_level(BldgServer.Address.parse!(flr)) do
+      level when is_integer(level) -> level
+      :error -> raise ArgumentError, "no floor level in address #{inspect(flr)}"
+    end
   end
 
   def extract_name(bldg_url) do
@@ -603,13 +593,13 @@ defmodule BldgServer.Buildings do
     {x, y + offset}
   end
 
+  def get_container(""), do: ""
+
   def get_container(addr) do
-    addr
-    |> String.split(address_delimiter())
-    |> Enum.reverse()
-    |> tl()
-    |> Enum.reverse()
-    |> Enum.join(address_delimiter())
+    case BldgServer.Address.container(BldgServer.Address.parse!(addr)) do
+      :error -> ""
+      container -> BldgServer.Address.to_string(container)
+    end
   end
 
   def get_container_flr(addr) do
@@ -897,14 +887,11 @@ defmodule BldgServer.Buildings do
   end
 
   def calculate_nesting_depth(entity) do
-    num_slashes =
-      Map.get(entity, "address") |> String.split(address_delimiter()) |> Enum.drop(1) |> length()
-
     depth =
-      case num_slashes do
-        0 -> 0
-        _ -> trunc(num_slashes / 2)
-      end
+      entity
+      |> Map.get("address")
+      |> BldgServer.Address.parse!()
+      |> BldgServer.Address.nesting_depth()
 
     Map.put(entity, "nesting_depth", depth)
   end

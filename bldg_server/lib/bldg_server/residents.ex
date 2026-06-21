@@ -223,13 +223,7 @@ defmodule BldgServer.Residents do
   end
 
   def calculate_nesting_depth_from_address(address) do
-    num_slashes = address
-    |> String.split(Buildings.address_delimiter)
-    |> Enum.drop(1) |> length()
-    case num_slashes do
-      0 -> 0
-      _ -> trunc((num_slashes + 1) / 2)
-    end
+    BldgServer.Address.inside_depth(BldgServer.Address.parse!(address))
   end
 
   def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level, post_enter_x, post_enter_y) do
