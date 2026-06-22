@@ -28,8 +28,8 @@ defmodule BldgServerWeb.FloorChannelTest do
 
       expected_keys =
         ~w(id bldg_url address name flr flr_url flr_level nesting_depth x y
-           is_composite web_url entity_type state category tags summary picture_url
-           color size variant owners previous_messages updated_at data
+           width height is_composite web_url entity_type state category tags summary
+           picture_url color size variant owners previous_messages updated_at data
            visual_language favorite_view_points)a
         |> Enum.sort()
 

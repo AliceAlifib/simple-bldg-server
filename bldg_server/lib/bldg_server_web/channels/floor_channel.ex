@@ -44,6 +44,8 @@ defmodule BldgServerWeb.FloorChannel do
       nesting_depth: bldg.nesting_depth,
       x: bldg.x,
       y: bldg.y,
+      width: bldg.width,
+      height: bldg.height,
       is_composite: bldg.is_composite,
       web_url: bldg.web_url,
       entity_type: bldg.entity_type,

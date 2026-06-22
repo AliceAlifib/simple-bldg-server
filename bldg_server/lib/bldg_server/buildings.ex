@@ -881,6 +881,49 @@ defmodule BldgServer.Buildings do
   end
 
   @doc """
+  Whether two footprints intersect. Each is a map with `:x`, `:y`, `:width`,
+  `:height`; `{x, y}` is the bottom-left origin, covering `x..x+width-1` ×
+  `y..y+height-1`.
+  """
+  def footprints_overlap?(a, b) do
+    a.x < b.x + b.width and b.x < a.x + a.width and
+      a.y < b.y + b.height and b.y < a.y + a.height
+  end
+
+  @doc """
+  The footprints of every bldg currently on `flr`.
+  """
+  def occupied_footprints(flr) do
+    Repo.all(
+      from(b in Bldg,
+        where: b.flr == ^flr,
+        select: %{x: b.x, y: b.y, width: b.width, height: b.height}
+      )
+    )
+  end
+
+  @doc """
+  The first free `width` x `height` footprint on a `max_x` x `max_y` floor,
+  scanning row-major from `{1, 1}` and skipping any origin whose rectangle would
+  exceed the floor or intersect one of the `occupied` footprints. Returns a
+  `%{x, y, width, height}` map, or `nil` when there is no room.
+  """
+  def find_free_footprint(occupied, width, height, max_x, max_y) do
+    Enum.find_value(1..max_y, fn y ->
+      Enum.find_value(1..max_x, fn x ->
+        candidate = %{x: x, y: y, width: width, height: height}
+
+        cond do
+          x + width - 1 > max_x -> nil
+          y + height - 1 > max_y -> nil
+          Enum.any?(occupied, &footprints_overlap?(candidate, &1)) -> nil
+          true -> candidate
+        end
+      end)
+    end)
+  end
+
+  @doc """
   Replaces the coordinates of the *last* bldg segment of an address.
 
   The bldg's own coords are always the final `b(x,y)` segment, so we target it
@@ -918,20 +961,18 @@ defmodule BldgServer.Buildings do
 
     case Map.get(entity, "address") do
       nil ->
-        # try to find place near entities of the same entity-type
-        %{"flr" => flr, "entity_type" => entity_type} = entity
-        similar_bldgs = get_similar_entities(flr, entity_type)
+        flr = Map.fetch!(entity, "flr")
+        width = Map.get(entity, "width", 1)
+        height = Map.get(entity, "height", 1)
 
+        # Place the new bldg's footprint clear of every footprint already on the
+        # floor. A full floor yields nil; fall back to a random slot and let the
+        # unique-address constraint + create retry resolve any residual collision
+        # rather than crashing on a {x, y} = nil match.
         {x, y} =
-          case similar_bldgs do
-            [] ->
-              random_location(max_x, max_y)
-
-            _ ->
-              # A full floor yields nil; fall back to a random slot and let the
-              # unique-address constraint + create retry resolve any collision,
-              # rather than crashing on a {x,y} = nil match.
-              get_next_location(similar_bldgs, max_x, max_y) || random_location(max_x, max_y)
+          case find_free_footprint(occupied_footprints(flr), width, height, max_x, max_y) do
+            nil -> random_location(max_x, max_y)
+            %{x: x, y: y} -> {x, y}
           end
 
         Map.merge(entity, %{

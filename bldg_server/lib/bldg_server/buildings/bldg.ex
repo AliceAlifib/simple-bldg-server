@@ -19,6 +19,8 @@ defmodule BldgServer.Buildings.Bldg do
     field(:web_url, :string)
     field(:x, :integer)
     field(:y, :integer)
+    field(:width, :integer, default: 1)
+    field(:height, :integer, default: 1)
     field(:owners, {:array, :string})
     field(:bldg_url, :string)
     field(:flr_url, :string)
@@ -62,7 +64,9 @@ defmodule BldgServer.Buildings.Bldg do
       :favorite_view_points,
       :color,
       :size,
-      :variant
+      :variant,
+      :width,
+      :height
     ])
     |> validate_required([
       :bldg_url,
@@ -76,6 +80,8 @@ defmodule BldgServer.Buildings.Bldg do
       :nesting_depth
     ])
     |> validate_inclusion(:size, @sizes)
+    |> validate_number(:width, greater_than: 0)
+    |> validate_number(:height, greater_than: 0)
     |> unique_constraint(:address)
     |> unique_constraint(:bldg_url)
   end
