@@ -1,15 +1,15 @@
 defmodule BldgServer.ProtocolGapsTest do
   @moduledoc """
-  Executable documentation of two gaps the upcoming protocol work will close:
-
-    1. Relocating a *container* bldg does not rewrite its nested children — their
-       address/flr/bldg_url go stale (only connected roads are cascaded today).
-    2. Bldgs have no footprint (only a point {x,y}), so overlap cannot be
-       expressed and placement only avoids exact-coordinate collisions.
+  Executable documentation of a remaining gap the upcoming protocol work will
+  close: bldgs have no footprint (only a point {x,y}), so overlap cannot be
+  expressed and placement only avoids exact-coordinate collisions.
 
   Each gap has a GREEN characterization test (pins today's behavior — it will
   start failing the moment the feature lands, which is the signal to update it)
   and a `@tag :skip` SPEC test describing the target behavior (unskip when built).
+
+  (The container-relocation gap that used to live here is now closed — see
+  BuildingsRelocationTest.)
   """
   use BldgServer.DataCase
 
@@ -17,66 +17,7 @@ defmodule BldgServer.ProtocolGapsTest do
   alias BldgServer.Buildings.Bldg
   alias BldgServer.Repo
 
-  # ── Gap 1: container relocation leaves children stale ──────────────────────
-
-  describe "container relocation (gap)" do
-    setup do
-      seed_ground_floor()
-      container = bldg(%{address: "g/b(5,5)", bldg_url: "g/b(5,5)", flr: "g", name: "team"})
-
-      child =
-        bldg(%{
-          address: "g/b(5,5)/l0/b(1,1)",
-          bldg_url: "g/b(5,5)/l0/b(1,1)",
-          flr: "g/b(5,5)/l0",
-          name: "child"
-        })
-
-      grandchild =
-        bldg(%{
-          address: "g/b(5,5)/l0/b(1,1)/l0/b(2,2)",
-          bldg_url: "g/b(5,5)/l0/b(1,1)/l0/b(2,2)",
-          flr: "g/b(5,5)/l0/b(1,1)/l0",
-          name: "grandchild"
-        })
-
-      %{container: container, child: child, grandchild: grandchild}
-    end
-
-    test "TODAY: relocating the container leaves descendant addresses stale", ctx do
-      assert {:ok, _moved} =
-               Buildings.update_bldg(ctx.container, %{
-                 "address" => "g/b(9,9)",
-                 "bldg_url" => "g/b(9,9)"
-               })
-
-      # The container moved, but its descendants still point at the old subtree —
-      # they are now orphaned. This is the gap the relocation feature must fix.
-      assert Repo.get(Bldg, ctx.child.id).address == "g/b(5,5)/l0/b(1,1)"
-      assert Repo.get(Bldg, ctx.child.id).flr == "g/b(5,5)/l0"
-      assert Repo.get(Bldg, ctx.grandchild.id).address == "g/b(5,5)/l0/b(1,1)/l0/b(2,2)"
-    end
-
-    @tag skip: "pending: container relocation cascade — unskip when implemented"
-    test "TARGET: relocating the container rewrites every descendant's address/flr/bldg_url", ctx do
-      assert {:ok, _moved} =
-               Buildings.update_bldg(ctx.container, %{
-                 "address" => "g/b(9,9)",
-                 "bldg_url" => "g/b(9,9)"
-               })
-
-      child = Repo.get(Bldg, ctx.child.id)
-      assert child.address == "g/b(9,9)/l0/b(1,1)"
-      assert child.flr == "g/b(9,9)/l0"
-      assert child.bldg_url == "g/b(9,9)/l0/b(1,1)"
-
-      grandchild = Repo.get(Bldg, ctx.grandchild.id)
-      assert grandchild.address == "g/b(9,9)/l0/b(1,1)/l0/b(2,2)"
-      assert grandchild.flr == "g/b(9,9)/l0/b(1,1)/l0"
-    end
-  end
-
-  # ── Gap 2: bldgs are dimensionless points; overlap is unrepresentable ───────
+  # ── Gap: bldgs are dimensionless points; overlap is unrepresentable ─────────
 
   describe "bldg footprint / overlap (gap)" do
     test "TODAY: the schema models a single point, with no width/height footprint" do
