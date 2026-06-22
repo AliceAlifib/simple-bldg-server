@@ -14,5 +14,13 @@ config :bldg_server, BldgServerWeb.Endpoint,
   http: [port: 4002],
   server: false
 
+# Capture outbound mail in-memory instead of hitting SendGrid. Tests can then
+# assert delivery with `Bamboo.Test`'s `assert_delivered_email/1`.
+config :bldg_server, BldgServer.Mailer, adapter: Bamboo.TestAdapter
+
+# Point the DGraph client at a local default; staging tests override this to a
+# Bypass port via Application.put_env at runtime.
+config :bldg_server, :dgraph_url, "http://localhost:8080"
+
 # Print only warnings and errors during test
 config :logger, level: :warn

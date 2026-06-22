@@ -2,34 +2,20 @@ defmodule BldgServerWeb.BatteryControllerTest do
   use BldgServerWeb.ConnCase
 
   alias BldgServer.Batteries
-  alias BldgServer.Batteries.Battery
 
-  @create_attrs %{
-    battery_type: "some battery_type",
-    battery_vendor: "some battery_vendor",
-    battery_version: "some battery_version",
-    bldg_address: "some bldg_address",
-    callback_url: "some callback_url",
-    direct_only: true,
-    flr: "some flr",
-    is_attached: true
-  }
-  @update_attrs %{
-    battery_type: "some updated battery_type",
-    battery_vendor: "some updated battery_vendor",
-    battery_version: "some updated battery_version",
-    bldg_address: "some updated bldg_address",
-    callback_url: "some updated callback_url",
-    direct_only: false,
-    flr: "some updated flr",
-    is_attached: false
-  }
-  @invalid_attrs %{battery_type: nil, battery_vendor: nil, battery_version: nil, bldg_address: nil, callback_url: nil, direct_only: nil, flr: nil, is_attached: nil}
+  # The batteries resource excludes :create and its show/update/delete actions
+  # are unreachable (route param is "bldg_address" but the actions match "id"),
+  # so the real, client-facing battery API is the custom routes exercised here:
+  # /batteries/{attach,detach,register,unregister}.
 
-  def fixture(:battery) do
-    {:ok, battery} = Batteries.create_battery(@create_attrs)
-    battery
-  end
+  @attach_attrs %{
+    "battery_type" => "file-system-battery",
+    "battery_vendor" => "acme",
+    "battery_version" => "1",
+    "bldg_url" => "g/b(1,1)/battery",
+    "callback_url" => "http://localhost:9999/cb",
+    "flr" => "g"
+  }
 
   setup %{conn: conn} do
     {:ok, conn: put_req_header(conn, "accept", "application/json")}
@@ -42,75 +28,55 @@ defmodule BldgServerWeb.BatteryControllerTest do
     end
   end
 
-  describe "create battery" do
-    test "renders battery when data is valid", %{conn: conn} do
-      conn = post(conn, Routes.battery_path(conn, :create), battery: @create_attrs)
-      assert %{"id" => id} = json_response(conn, 201)["data"]
-
-      conn = get(conn, Routes.battery_path(conn, :show, id))
+  describe "attach" do
+    test "creates an attached battery and renders it", %{conn: conn} do
+      conn = post(conn, "/v1/batteries/attach", battery: @attach_attrs)
 
       assert %{
-               "id" => id,
-               "battery_type" => "some battery_type",
-               "battery_vendor" => "some battery_vendor",
-               "battery_version" => "some battery_version",
-               "bldg_address" => "some bldg_address",
-               "callback_url" => "some callback_url",
-               "direct_only" => true,
-               "flr" => "some flr",
-               "is_attached" => true
-             } = json_response(conn, 200)["data"]
+               "id" => _id,
+               "bldg_url" => "g/b(1,1)/battery",
+               "callback_url" => "http://localhost:9999/cb",
+               "flr" => "g",
+               "is_attached" => true,
+               "battery_type" => "file-system-battery"
+             } = json_response(conn, 201)["data"]
+
+      # The battery is persisted and marked attached for its bldg_url.
+      assert %{is_attached: true} =
+               Batteries.get_attached_battery_by_bldg_url("g/b(1,1)/battery")
     end
 
-    test "renders errors when data is invalid", %{conn: conn} do
-      conn = post(conn, Routes.battery_path(conn, :create), battery: @invalid_attrs)
+    test "renders errors when required fields are missing", %{conn: conn} do
+      conn = post(conn, "/v1/batteries/attach", battery: %{"battery_type" => "x"})
       assert json_response(conn, 422)["errors"] != %{}
     end
   end
 
-  describe "update battery" do
-    setup [:create_battery]
+  describe "detach" do
+    test "deletes the attached battery for a bldg_url", %{conn: conn} do
+      battery(%{bldg_url: "g/b(2,2)/battery", is_attached: true})
 
-    test "renders battery when data is valid", %{conn: conn, battery: %Battery{id: id} = battery} do
-      conn = put(conn, Routes.battery_path(conn, :update, battery), battery: @update_attrs)
-      assert %{"id" => ^id} = json_response(conn, 200)["data"]
-
-      conn = get(conn, Routes.battery_path(conn, :show, id))
-
-      assert %{
-               "id" => id,
-               "battery_type" => "some updated battery_type",
-               "battery_vendor" => "some updated battery_vendor",
-               "battery_version" => "some updated battery_version",
-               "bldg_address" => "some updated bldg_address",
-               "callback_url" => "some updated callback_url",
-               "direct_only" => false,
-               "flr" => "some updated flr",
-               "is_attached" => false
-             } = json_response(conn, 200)["data"]
-    end
-
-    test "renders errors when data is invalid", %{conn: conn, battery: battery} do
-      conn = put(conn, Routes.battery_path(conn, :update, battery), battery: @invalid_attrs)
-      assert json_response(conn, 422)["errors"] != %{}
-    end
-  end
-
-  describe "delete battery" do
-    setup [:create_battery]
-
-    test "deletes chosen battery", %{conn: conn, battery: battery} do
-      conn = delete(conn, Routes.battery_path(conn, :delete, battery))
+      conn = post(conn, "/v1/batteries/detach", bldg_url: "g/b(2,2)/battery")
       assert response(conn, 204)
 
-      assert_error_sent 404, fn ->
-        get(conn, Routes.battery_path(conn, :show, battery))
-      end
+      assert Batteries.get_attached_battery_by_bldg_url("g/b(2,2)/battery") == nil
     end
   end
 
-  defp create_battery(_) do
-    battery = fixture(:battery)
-    {:ok, battery: battery}
+  describe "register / unregister (Redis pool)" do
+    test "registers and unregisters a callback for a battery type", %{conn: conn} do
+      type = "pool-type-#{System.unique_integer([:positive])}"
+      cb = "http://localhost:9999/pool-cb"
+
+      conn = post(conn, "/v1/batteries/register", battery: %{"battery_type" => type, "callback_url" => cb})
+      assert json_response(conn, 200)["status"] == "registered"
+      assert {:ok, callbacks} = Batteries.get_registered_callbacks(type)
+      assert cb in callbacks
+
+      conn = post(conn, "/v1/batteries/unregister", battery: %{"battery_type" => type, "callback_url" => cb})
+      assert json_response(conn, 200)["status"] == "unregistered"
+      assert {:ok, after_cbs} = Batteries.get_registered_callbacks(type)
+      refute cb in after_cbs
+    end
   end
 end

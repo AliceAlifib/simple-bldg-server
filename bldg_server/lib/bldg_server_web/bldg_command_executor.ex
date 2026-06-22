@@ -166,8 +166,10 @@ defmodule BldgServerWeb.BldgCommandExecutor do
             data
 
           {:error, %Redix.ConnectionError{reason: error_reason}} ->
+            # Surface the failure instead of returning the error reason *as data*
+            # (which silently persisted e.g. `:closed` as the bldg's content).
             Logger.error("Failed to read data from Redis: #{error_reason}")
-            error_reason
+            raise "Failed to read data from Redis (#{redis_key}): #{error_reason}"
         end
     end
   end
@@ -520,15 +522,18 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         container = Buildings.get_by_bldg_url(container_bldg_url)
         {_, data} = Jason.decode(container.data || "{}")
         # find the key matching the picture-url
-        data_key =
-          data
-          |> Enum.find(fn {_, val} -> val == picture_url end)
-          |> elem(0)
 
-        # TODO check that key exists
-        {_, new_data} = Map.delete(data, data_key) |> Jason.encode()
-        # update bldg
-        Buildings.update_bldg(container, %{"data" => new_data})
+        case Enum.find(data, fn {_, val} -> val == picture_url end) do
+          nil ->
+            # Guard the previous `nil |> elem(0)` crash when the bldg was never
+            # promoted into this container (no matching picture-url key).
+            raise "Cannot demote #{name}: it is not promoted inside #{container.web_url}"
+
+          {data_key, _} ->
+            {_, new_data} = Map.delete(data, data_key) |> Jason.encode()
+            # update bldg
+            Buildings.update_bldg(container, %{"data" => new_data})
+        end
     end
   end
 
@@ -602,9 +607,20 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       "~~~~~~~~~~~~ [bldg command executor] chat message received: #{new_message["message"]}"
     )
 
-    new_message["say_text"]
-    |> parse_command()
-    |> execute_command(new_message)
+    # Commands arrive via fire-and-forget PubSub broadcast, so a raise here
+    # (Unauthorized, missing bldg, bad parse) would crash this GenServer and drop
+    # its "chat" subscription until the supervisor restarts it. Isolate failures
+    # to the offending message instead.
+    try do
+      new_message["say_text"]
+      |> parse_command()
+      |> execute_command(new_message)
+    rescue
+      e ->
+        Logger.error(
+          "[bldg command executor] command failed: #{Exception.message(e)} for say_text=#{inspect(new_message["say_text"])}"
+        )
+    end
 
     {:noreply, state}
   end

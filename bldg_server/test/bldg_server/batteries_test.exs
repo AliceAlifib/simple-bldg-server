@@ -6,9 +6,9 @@ defmodule BldgServer.BatteriesTest do
   describe "batteries" do
     alias BldgServer.Batteries.Battery
 
-    @valid_attrs %{battery_type: "some battery_type", battery_vendor: "some battery_vendor", battery_version: "some battery_version", bldg_address: "some bldg_address", callback_url: "some callback_url", direct_only: true, flr: "some flr", is_attached: true}
-    @update_attrs %{battery_type: "some updated battery_type", battery_vendor: "some updated battery_vendor", battery_version: "some updated battery_version", bldg_address: "some updated bldg_address", callback_url: "some updated callback_url", direct_only: false, flr: "some updated flr", is_attached: false}
-    @invalid_attrs %{battery_type: nil, battery_vendor: nil, battery_version: nil, bldg_address: nil, callback_url: nil, direct_only: nil, flr: nil, is_attached: nil}
+    @valid_attrs %{battery_type: "some battery_type", battery_vendor: "some battery_vendor", battery_version: "some battery_version", bldg_url: "some bldg_url", callback_url: "some callback_url", direct_only: true, flr: "some flr", is_attached: true}
+    @update_attrs %{battery_type: "some updated battery_type", battery_vendor: "some updated battery_vendor", battery_version: "some updated battery_version", bldg_url: "some updated bldg_url", callback_url: "some updated callback_url", direct_only: false, flr: "some updated flr", is_attached: false}
+    @invalid_attrs %{battery_type: nil, battery_vendor: nil, battery_version: nil, bldg_url: nil, callback_url: nil, direct_only: nil, flr: nil, is_attached: nil}
 
     def battery_fixture(attrs \\ %{}) do
       {:ok, battery} =
@@ -29,12 +29,26 @@ defmodule BldgServer.BatteriesTest do
       assert Batteries.get_battery!(battery.id) == battery
     end
 
+    test "get_attached_battery_by_bldg_url/1 returns the attached battery for a bldg" do
+      battery = battery_fixture(%{bldg_url: "g/home/battery", is_attached: true})
+      assert Batteries.get_attached_battery_by_bldg_url("g/home/battery") == battery
+    end
+
+    test "get_attached_battery_by_bldg_url/1 returns nil when no battery is attached" do
+      assert Batteries.get_attached_battery_by_bldg_url("g/home/nope") == nil
+    end
+
+    test "get_attached_battery_by_bldg_url/1 ignores non-attached batteries" do
+      battery_fixture(%{bldg_url: "g/home/detached", is_attached: false})
+      assert Batteries.get_attached_battery_by_bldg_url("g/home/detached") == nil
+    end
+
     test "create_battery/1 with valid data creates a battery" do
       assert {:ok, %Battery{} = battery} = Batteries.create_battery(@valid_attrs)
       assert battery.battery_type == "some battery_type"
       assert battery.battery_vendor == "some battery_vendor"
       assert battery.battery_version == "some battery_version"
-      assert battery.bldg_address == "some bldg_address"
+      assert battery.bldg_url == "some bldg_url"
       assert battery.callback_url == "some callback_url"
       assert battery.direct_only == true
       assert battery.flr == "some flr"
@@ -51,7 +65,7 @@ defmodule BldgServer.BatteriesTest do
       assert battery.battery_type == "some updated battery_type"
       assert battery.battery_vendor == "some updated battery_vendor"
       assert battery.battery_version == "some updated battery_version"
-      assert battery.bldg_address == "some updated bldg_address"
+      assert battery.bldg_url == "some updated bldg_url"
       assert battery.callback_url == "some updated callback_url"
       assert battery.direct_only == false
       assert battery.flr == "some updated flr"

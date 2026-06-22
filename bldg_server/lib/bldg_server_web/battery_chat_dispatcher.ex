@@ -4,6 +4,7 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
   alias BldgServer.PubSub
 
   alias BldgServer.Batteries
+  alias BldgServer.Batteries.Battery
   alias BldgServer.Buildings
 
   def start_link(_) do
@@ -39,10 +40,33 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
     IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received at #{flr_url}:")
     IO.inspect(new_message)
 
-    # find battery bldgs on this floor, extract their types,
-    # then look up registered callback_urls from Redis for each type
-    flr_url
-    |> Buildings.get_batteries_in_floor()
+    # find battery bldgs on this floor
+    battery_bldgs = Buildings.get_batteries_in_floor(flr_url)
+
+    # Attached batteries are bound to one specific battery bldg (e.g. a per-sprite
+    # file-system-battery). Route the message straight to that battery's own
+    # callback_url rather than the shared, type-keyed registered pool. Collect the
+    # bldg_urls handled this way so they're excluded from the registered fallback.
+    attached_bldg_urls =
+      Enum.reduce(battery_bldgs, MapSet.new(), fn bldg, acc ->
+        case Batteries.get_attached_battery_by_bldg_url(bldg.bldg_url) do
+          %Battery{callback_url: callback_url} when is_binary(callback_url) ->
+            IO.puts(
+              "~~~ [battery chat dispatcher] routing to attached battery at #{bldg.bldg_url} -> #{callback_url}"
+            )
+
+            send_message_to_battery(callback_url, new_message)
+            MapSet.put(acc, bldg.bldg_url)
+
+          _ ->
+            acc
+        end
+      end)
+
+    # Remaining (non-attached) battery bldgs keep the legacy behavior: dedup by
+    # battery_type, then dispatch to a random registered callback_url for the type.
+    battery_bldgs
+    |> Enum.reject(fn bldg -> MapSet.member?(attached_bldg_urls, bldg.bldg_url) end)
     |> Enum.map(fn b -> Buildings.extract_battery_type(b) end)
     |> Enum.uniq()
     |> Enum.each(fn battery_type ->

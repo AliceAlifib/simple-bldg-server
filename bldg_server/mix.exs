@@ -10,7 +10,14 @@ defmodule BldgServer.MixProject do
       compilers: [:phoenix] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -49,7 +56,11 @@ defmodule BldgServer.MixProject do
       {:bamboo_smtp, "~> 3.1.3"},
       {:redix, "~> 1.2"},
       {:sentry, "~> 10.2"},
-      {:hackney, "~> 1.20"}
+      {:hackney, "~> 1.20"},
+      # External HTTP boundaries (DGraph, battery webhooks) are faked in tests
+      # with a small Plug.Cowboy server rather than Bypass — Bypass pins ranch
+      # ~> 1.3, which conflicts with the ranch 2.x that cowboy 2.14 requires.
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 

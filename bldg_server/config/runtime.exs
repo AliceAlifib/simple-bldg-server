@@ -13,6 +13,15 @@ config :sentry,
   root_source_code_paths: [File.cwd!()],
   tags: %{service: "bldg-server", fly_app: System.get_env("FLY_APP_NAME")}
 
+if config_env() == :test do
+  # application.ex reads these via System.fetch_env! at boot. Provide localhost
+  # defaults so `mix test` works out of the box against a standard password-less
+  # Redis; CI or a developer can override by exporting REDIS_* before the suite.
+  System.put_env("REDIS_HOST", System.get_env("REDIS_HOST") || "localhost")
+  System.put_env("REDIS_PORT", System.get_env("REDIS_PORT") || "6379")
+  System.put_env("REDIS_PWD", System.get_env("REDIS_PWD") || "")
+end
+
 if config_env() == :prod do
   secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
   app_port = System.fetch_env!("APP_PORT")
@@ -54,12 +63,17 @@ if config_env() == :prod do
     socket_options: [:inet6]
 end
 
-config :bldg_server, BldgServer.Mailer,
-  adapter: Bamboo.SendGridAdapter,
-  api_key: System.get_env("SENDGRID_API_KEY"),
-  hackney_opts: [
-    recv_timeout: :timer.minutes(1)
-  ]
+# Test uses Bamboo.TestAdapter (set in config/test.exs); don't clobber it here.
+# runtime.exs is evaluated after compile-time config, so this block would
+# otherwise override the test adapter and make login tests hit SendGrid.
+unless config_env() == :test do
+  config :bldg_server, BldgServer.Mailer,
+    adapter: Bamboo.SendGridAdapter,
+    api_key: System.get_env("SENDGRID_API_KEY"),
+    hackney_opts: [
+      recv_timeout: :timer.minutes(1)
+    ]
+end
 
 # ## Using releases (Elixir v1.9+)
 #

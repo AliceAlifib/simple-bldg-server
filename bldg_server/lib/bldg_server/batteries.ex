@@ -78,6 +78,16 @@ defmodule BldgServer.Batteries do
   end
 
   @doc """
+  Gets the attached battery bound to a bldg by its url, or `nil` if none is
+  attached. Non-raising counterpart to `get_attached_battery_by_bldg_url!/1`,
+  used by the chat dispatcher to decide whether to route a message to a
+  bldg-specific (attached) battery callback or fall back to the registered pool.
+  """
+  def get_attached_battery_by_bldg_url(bldg_url) do
+    Repo.get_by(Battery, is_attached: true, bldg_url: bldg_url)
+  end
+
+  @doc """
   Gets a single battery by it's container bldg's address.
 
   Raises `Ecto.NoResultsError` if the Battery does not exist.

@@ -6,9 +6,9 @@ defmodule BldgServer.RelationsTest do
   describe "roads" do
     alias BldgServer.Relations.Road
 
-    @valid_attrs %{flr: "some flr", from_address: "some from_address", to_address: "some to_address"}
-    @update_attrs %{flr: "some updated flr", from_address: "some updated from_address", to_address: "some updated to_address"}
-    @invalid_attrs %{flr: nil, from_address: nil, to_address: nil}
+    @valid_attrs %{flr: "some flr", from_address: "some from_address", to_address: "some to_address", from_x: 1, from_y: 1, to_x: 2, to_y: 2}
+    @update_attrs %{flr: "some updated flr", from_address: "some updated from_address", to_address: "some updated to_address", from_x: 3, from_y: 3, to_x: 4, to_y: 4}
+    @invalid_attrs %{flr: nil, from_address: nil, to_address: nil, from_x: nil, from_y: nil, to_x: nil, to_y: nil}
 
     def road_fixture(attrs \\ %{}) do
       {:ok, road} =
