@@ -353,6 +353,7 @@ defmodule BldgServer.Buildings do
     cs =
       %Bldg{}
       |> Bldg.changeset(attrs)
+      |> reject_if_overlapping()
 
     # TODO figure out better way to notify bldg_url & address
     created_bldg_url = attrs["bldg_url"]
@@ -374,6 +375,33 @@ defmodule BldgServer.Buildings do
         # pattern-match {:error, _} — can render a 422 rather than 500.
         Logger.error("Failed to prepare bldg for writing to database: #{inspect(cs.errors)}")
         {:error, cs}
+    end
+  end
+
+  # Reject a create whose footprint would overlap an existing bldg on the same
+  # floor. Auto-placement already avoids this (find_free_footprint chooses a
+  # clear slot); this guards the *explicit*-placement path — where a caller
+  # supplies exact coords — since the unique-address constraint only catches an
+  # identical origin, not a partial footprint overlap.
+  defp reject_if_overlapping(%Ecto.Changeset{valid?: false} = cs), do: cs
+
+  defp reject_if_overlapping(cs) do
+    flr = Ecto.Changeset.get_field(cs, :flr)
+    x = Ecto.Changeset.get_field(cs, :x)
+    y = Ecto.Changeset.get_field(cs, :y)
+    width = Ecto.Changeset.get_field(cs, :width) || 1
+    height = Ecto.Changeset.get_field(cs, :height) || 1
+
+    if is_binary(flr) and is_integer(x) and is_integer(y) do
+      candidate = %{x: x, y: y, width: width, height: height}
+
+      if Enum.any?(occupied_footprints(flr), &footprints_overlap?(candidate, &1)) do
+        Ecto.Changeset.add_error(cs, :address, "footprint overlaps an existing bldg on this floor")
+      else
+        cs
+      end
+    else
+      cs
     end
   end
 
