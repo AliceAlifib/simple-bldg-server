@@ -186,6 +186,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         color,
         size,
         variant,
+        width,
+        height,
         msg
       ) do
     # create a bldg with the given entity-type & name, inside the given flr & bldg
@@ -234,6 +236,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         |> put_if_present("color", color)
         |> put_if_present("size", size)
         |> put_if_present("variant", variant)
+        |> put_if_present("width", width)
+        |> put_if_present("height", height)
 
       Buildings.build(entity)
       |> Buildings.create_bldg(msg)
@@ -259,11 +263,16 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     color = ""
     size = ""
     variant = ""
+    # nil (not "") sentinel: dimensions are integers, so put_if_present skips
+    # them when unspecified and the schema default (1) applies.
+    width = nil
+    height = nil
 
     # Loop through parameters with index
     Enum.with_index(parameters_tokens)
     |> Enum.reduce(
-      {name, web_url, summary, category, picture_url, data_url, state, color, size, variant},
+      {name, web_url, summary, category, picture_url, data_url, state, color, size, variant, width,
+       height},
       fn
         {"name", i}, acc ->
           name = Enum.at(parameters_tokens, i + 1)
@@ -291,7 +300,9 @@ defmodule BldgServerWeb.BldgCommandExecutor do
                   "state",
                   "color",
                   "size",
-                  "variant"
+                  "variant",
+                  "width",
+                  "height"
                 ],
                 x
               )
@@ -336,12 +347,18 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           acc = put_elem(acc, 9, variant)
           acc
 
+        {"width", i}, acc ->
+          put_elem(acc, 10, parse_dimension(Enum.at(parameters_tokens, i + 1)))
+
+        {"height", i}, acc ->
+          put_elem(acc, 11, parse_dimension(Enum.at(parameters_tokens, i + 1)))
+
         _, acc ->
           acc
       end
     )
     |> then(fn {name, web_url, summary, category, picture_url, data_url, state, color, size,
-                variant} ->
+                variant, width, height} ->
       create_bldg_from_command(
         entity_type,
         name,
@@ -354,9 +371,22 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         color,
         size,
         variant,
+        width,
+        height,
         msg
       )
     end)
+  end
+
+  # Dimensions must be whole positive cell-counts; a missing or non-integer token
+  # yields nil so the schema default (1) applies rather than a bad value.
+  defp parse_dimension(nil), do: nil
+
+  defp parse_dimension(token) do
+    case Integer.parse(token) do
+      {n, ""} when n > 0 -> n
+      _ -> nil
+    end
   end
 
   # move bldg
