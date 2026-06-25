@@ -9,6 +9,19 @@ defmodule BldgServer.BuildingsDimensionsTest do
   alias BldgServer.Buildings.Bldg
   alias BldgServer.Repo
 
+  defp create_attrs(overrides) do
+    Map.merge(
+      %{
+        "flr" => "g",
+        "is_composite" => false,
+        "entity_type" => "building",
+        "flr_level" => 0,
+        "nesting_depth" => 0
+      },
+      overrides
+    )
+  end
+
   describe "persistence" do
     test "a bldg persists its width/height footprint" do
       b = bldg(%{address: "g/b(1,1)", bldg_url: "g/b(1,1)", width: 3, height: 2})
@@ -92,6 +105,49 @@ defmodule BldgServer.BuildingsDimensionsTest do
 
       new_footprint = %{x: placed["x"], y: placed["y"], width: 3, height: 3}
       refute Buildings.footprints_overlap?(new_footprint, existing)
+    end
+  end
+
+  describe "create_bldg overlap rejection (explicit placement)" do
+    setup do
+      seed_ground_floor()
+      # A 3x3 bldg covering x:1..3, y:1..3 on the ground floor.
+      bldg(%{flr: "g", address: "g/b(1,1)", bldg_url: "g/b(1,1)", x: 1, y: 1, width: 3, height: 3, name: "big"})
+      :ok
+    end
+
+    test "rejects a create whose footprint overlaps an existing bldg on the floor" do
+      # 2x2 at {2,2} covers x:2..3, y:2..3 — intersects the existing 3x3. The
+      # address is unique, so only the footprint check can catch this.
+      attrs =
+        create_attrs(%{
+          "address" => "g/b(2,2)",
+          "bldg_url" => "g/b(2,2)",
+          "name" => "overlapper",
+          "x" => 2,
+          "y" => 2,
+          "width" => 2,
+          "height" => 2
+        })
+
+      assert {:error, cs} = Buildings.create_bldg(attrs)
+      assert Enum.any?(errors_on(cs).address, &(&1 =~ "overlaps"))
+    end
+
+    test "allows an edge-adjacent footprint (no overlap)" do
+      # 2x2 at {4,1} covers x:4..5 — flush against the existing bldg's right edge.
+      attrs =
+        create_attrs(%{
+          "address" => "g/b(4,1)",
+          "bldg_url" => "g/b(4,1)",
+          "name" => "neighbor",
+          "x" => 4,
+          "y" => 1,
+          "width" => 2,
+          "height" => 2
+        })
+
+      assert {:ok, _bldg} = Buildings.create_bldg(attrs)
     end
   end
 end
