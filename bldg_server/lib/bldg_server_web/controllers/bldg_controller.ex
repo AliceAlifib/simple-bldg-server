@@ -48,6 +48,36 @@ defmodule BldgServerWeb.BldgController do
     end
   end
 
+  @doc """
+  Deletes every bldg in a floor subtree (cascade), preserving the container bldg
+  itself (which sits on the PARENT floor, not this one). Used by the
+  file-system-battery to clear a container's interior before a re-render so
+  orphaned / mis-placed bldgs (not tracked in entities_map) are also removed.
+  Body: %{"flr" => "<container address>"}.
+  """
+  def delete_in_flr(conn, %{"flr" => flr}) do
+    deleted =
+      flr
+      |> Buildings.list_all_bldgs_in_flr()
+      |> Enum.reduce(0, fn bldg, acc ->
+        # Delete the snapshot struct DIRECTLY. Do NOT re-fetch by bldg_url —
+        # earlier incomplete cleanups can leave DUPLICATE rows with the same url,
+        # and Repo.get_by then raises MultipleResultsError (deleting by struct
+        # clears each duplicate by its own id). A sibling's cascade may already
+        # have removed this row → Ecto.StaleEntryError, which we skip.
+        try do
+          case Buildings.delete_bldg_cascade(bldg) do
+            {:ok, _} -> acc + 1
+            _ -> acc
+          end
+        rescue
+          Ecto.StaleEntryError -> acc
+        end
+      end)
+
+    json(conn, %{deleted: deleted, flr: flr})
+  end
+
   def look(conn, %{"flr" => flr}) do
     # unescape the flr parameter
     decoded_flr = URI.decode(flr)
