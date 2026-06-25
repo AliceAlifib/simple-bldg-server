@@ -109,7 +109,12 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         "road_class" => road_class || "road"
       }
 
-      Relations.create_road(road)
+      # Idempotent: re-emitting an identical road (watch / re-render passes, or
+      # the organize-check's road re-emission) must not stack duplicate records.
+      case Relations.find_road(msg["say_flr"], from_addr, to_addr) do
+        nil -> Relations.create_road(road)
+        existing -> {:ok, existing}
+      end
     end
   end
 

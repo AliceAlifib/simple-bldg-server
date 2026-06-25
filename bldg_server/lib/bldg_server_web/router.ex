@@ -23,6 +23,8 @@ defmodule BldgServerWeb.Router do
     post("/residents/act", ResidentController, :act)
     get("/roads/look/:flr", RoadController, :look)
     get("/roads/scan/:flr", RoadController, :scan)
+    post("/roads/delete_in_flr", RoadController, :delete_in_flr)
+    post("/bldgs/delete_in_flr", BldgController, :delete_in_flr)
     post("/batteries/register", BatteryController, :register)
     post("/batteries/unregister", BatteryController, :unregister)
     post("/batteries/attach", BatteryController, :attach)

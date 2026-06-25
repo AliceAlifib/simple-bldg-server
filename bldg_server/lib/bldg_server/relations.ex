@@ -106,6 +106,23 @@ defmodule BldgServer.Relations do
   def get_road!(id), do: Repo.get!(Road, id)
 
   @doc """
+  Finds an existing road on a floor between two endpoints (same direction), or
+  nil. Used to make `/connect` idempotent so re-emitting identical roads (watch /
+  re-render passes) doesn't accumulate duplicates.
+  """
+  def find_road(flr, from_address, to_address) do
+    # NB: the Road schema column is `flr` (there is no `flr_url` on roads) —
+    # `create_road` stores the say-floor address here. Querying `flr_url` raises
+    # `field flr_url does not exist`, which crashed every /connect and stopped
+    # roads from being created on re-render.
+    Repo.get_by(Road,
+      flr: flr,
+      from_address: from_address,
+      to_address: to_address
+    )
+  end
+
+  @doc """
   Creates a road.
 
   ## Examples
