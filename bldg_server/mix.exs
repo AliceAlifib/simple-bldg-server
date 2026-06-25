@@ -4,13 +4,20 @@ defmodule BldgServer.MixProject do
   def project do
     [
       app: :bldg_server,
-      version: "0.5.6",
+      version: "0.9.0",
       elixir: "~> 1.5",
       elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: [:phoenix, :gettext] ++ Mix.compilers(),
+      compilers: [:phoenix] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -33,20 +40,27 @@ defmodule BldgServer.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix, "~> 1.5.9"},
+      {:phoenix, "~> 1.7.2"},
       {:phoenix_pubsub, "~> 2.0"},
       {:phoenix_ecto, "~> 4.0"},
-      {:ecto_sql, "~> 3.1"},
+      {:phoenix_view, "~> 2.0"},
+      {:ecto_sql, "~> 3.8"},
       {:postgrex, ">= 0.0.0"},
-      {:gettext, "~> 0.11"},
       {:jason, "~> 1.0"},
       {:plug_cowboy, "~> 2.0"},
       {:cors_plug, "~> 2.0"},
-      {:uuid, "~> 1.1" },
+      {:uuid, "~> 1.1"},
       {:json, "~> 1.4"},
       {:finch, "~> 0.7"},
       {:bamboo, "~> 1.7.1"},
-      {:bamboo_smtp, "~> 3.1.3"}
+      {:bamboo_smtp, "~> 3.1.3"},
+      {:redix, "~> 1.2"},
+      {:sentry, "~> 10.2"},
+      {:hackney, "~> 1.20"},
+      # External HTTP boundaries (DGraph, battery webhooks) are faked in tests
+      # with a small Plug.Cowboy server rather than Bypass — Bypass pins ranch
+      # ~> 1.3, which conflicts with the ranch 2.x that cowboy 2.14 requires.
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 

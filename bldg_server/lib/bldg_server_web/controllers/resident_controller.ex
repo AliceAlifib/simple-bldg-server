@@ -116,8 +116,14 @@ defmodule BldgServerWeb.ResidentController do
     render(conn, "look.json", residents: residents)
   end
 
-  # TODO bldgs can act as well - consolidate resident & bldg actions
+  def scan(conn, %{"flr" => flr}) do
+    # unescape the flr parameter
+    decoded_flr = URI.decode(flr)
+    residents = Residents.list_all_residents_in_flr(decoded_flr)
+    render(conn, "look.json", residents: residents)
+  end
 
+  # TODO bldgs can act as well - consolidate resident & bldg actions
 
   # MOVE action
   def act(conn, %{"resident_email" => email, "action_type" => "MOVE", "move_location" => location, "move_x" => x, "move_y" => y}) do
@@ -169,12 +175,41 @@ defmodule BldgServerWeb.ResidentController do
     end
   end
 
+    # ENTER_BLDG_FLR action
+    def act(conn, %{"resident_email" => email, "action_type" => "ENTER_BLDG_FLR", "bldg_address" => address, "bldg_url" => bldg_url, "flr_level" => flr_level, "post_enter_x" => post_enter_x, "post_enter_y" => post_enter_y}) do
+      resident = Residents.get_resident_by_email!(email)
+      # TODO validate that the resident is authorized to enter the given bldg
+
+      with {:ok, %Resident{} = upd_rsdt} <- Residents.enter_bldg_flr(resident, address, bldg_url, flr_level, post_enter_x, post_enter_y) do
+        IO.puts("enter_bldg_flr action")
+        IO.inspect(upd_rsdt)
+        conn
+        |> put_status(:ok)
+        |> put_resp_header("location", Routes.resident_path(conn, :show, upd_rsdt))
+        |> render("show.json", resident: upd_rsdt)
+      end
+    end
+
   # EXIT_BLDG action
-  def act(conn, %{"resident_email" => email, "action_type" => "EXIT_BLDG", "bldg_address" => address, "bldg_url" => bldg_url}) do
+  def act(conn, %{"resident_email" => email, "action_type" => "EXIT_BLDG", "bldg_address" => address, "bldg_url" => bldg_url, "post_exit_x" => post_exit_x, "post_exit_y" => post_exit_y}) do
     resident = Residents.get_resident_by_email!(email)
     # TODO validate that the resident is authorized to enter the container bldg (although if not, are they essentially locked?)
 
-    with {:ok, %Resident{} = upd_rsdt} <- Residents.exit_bldg(resident, address, bldg_url) do
+    with {:ok, %Resident{} = upd_rsdt} <- Residents.exit_bldg(resident, address, bldg_url, post_exit_x, post_exit_y) do
+      conn
+      |> put_status(:ok)
+      |> put_resp_header("location", Routes.resident_path(conn, :show, upd_rsdt))
+      |> render("show.json", resident: upd_rsdt)
+    end
+  end
+
+  # change_view_mode action — persists the user's bird-eye vs immersive UI
+  # preference. Broadcasts `resident_updated` so other clients of the same
+  # user can mirror the change without a scene reload.
+  def act(conn, %{"resident_email" => email, "action_type" => "change_view_mode", "view_mode" => view_mode}) do
+    resident = Residents.get_resident_by_email!(email)
+
+    with {:ok, %Resident{} = upd_rsdt} <- Residents.change_view_mode(resident, view_mode) do
       conn
       |> put_status(:ok)
       |> put_resp_header("location", Routes.resident_path(conn, :show, upd_rsdt))

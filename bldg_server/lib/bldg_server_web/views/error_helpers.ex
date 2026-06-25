@@ -6,7 +6,7 @@ defmodule BldgServerWeb.ErrorHelpers do
   @doc """
   Translates an error message using gettext.
   """
-  def translate_error({msg, opts}) do
+  def translate_error({msg, _}) do
     # When using gettext, we typically pass the strings we want
     # to translate as a static argument:
     #
@@ -24,10 +24,11 @@ defmodule BldgServerWeb.ErrorHelpers do
     # Note we use the "errors" domain, which means translations
     # should be written to the errors.po file. The :count option is
     # set by Ecto and indicates we should also apply plural rules.
-    if count = opts[:count] do
-      Gettext.dngettext(BldgServerWeb.Gettext, "errors", msg, msg, count, opts)
-    else
-      Gettext.dgettext(BldgServerWeb.Gettext, "errors", msg, opts)
-    end
+    #if count = opts[:count] do
+    #  Gettext.dngettext(BldgServerWeb.Gettext, "errors", msg, msg, count, opts)
+    #else
+    #  Gettext.dgettext(BldgServerWeb.Gettext, "errors", msg, opts)
+    #end
+    msg
   end
 end

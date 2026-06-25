@@ -25,6 +25,8 @@ defmodule BldgServerWeb.BldgView do
       nesting_depth: bldg.nesting_depth,
       x: bldg.x,
       y: bldg.y,
+      width: bldg.width,
+      height: bldg.height,
       is_composite: bldg.is_composite,
       web_url: bldg.web_url,
       entity_type: bldg.entity_type,
@@ -33,9 +35,14 @@ defmodule BldgServerWeb.BldgView do
       tags: bldg.tags,
       summary: bldg.summary,
       picture_url: bldg.picture_url,
+      color: bldg.color,
+      size: bldg.size,
+      variant: bldg.variant,
       owners: bldg.owners,
       previous_messages: bldg.previous_messages,
       updated_at: bldg.updated_at,
-      data: bldg.data}
+      data: bldg.data,
+      visual_language: if(bldg.visual_language, do: Jason.encode!(bldg.visual_language), else: nil),
+      favorite_view_points: bldg.favorite_view_points || []}
   end
 end

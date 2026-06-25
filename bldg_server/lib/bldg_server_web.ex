@@ -22,7 +22,6 @@ defmodule BldgServerWeb do
       use Phoenix.Controller, namespace: BldgServerWeb
 
       import Plug.Conn
-      import BldgServerWeb.Gettext
       alias BldgServerWeb.Router.Helpers, as: Routes
     end
   end
@@ -37,7 +36,6 @@ defmodule BldgServerWeb do
       import Phoenix.Controller, only: [get_flash: 1, get_flash: 2, view_module: 1]
 
       import BldgServerWeb.ErrorHelpers
-      import BldgServerWeb.Gettext
       alias BldgServerWeb.Router.Helpers, as: Routes
     end
   end
@@ -53,7 +51,6 @@ defmodule BldgServerWeb do
   def channel do
     quote do
       use Phoenix.Channel
-      import BldgServerWeb.Gettext
     end
   end
 

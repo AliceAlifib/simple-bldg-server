@@ -10,6 +10,6 @@ do
 done
 
 
-./prod/rel/bldg_server/bin/bldg_server eval BldgServer.Release.migrate
+./dev/rel/bldg_server/bin/bldg_server eval BldgServer.Release.migrate
 
-./prod/rel/bldg_server/bin/bldg_server start
+./dev/rel/bldg_server/bin/bldg_server start

@@ -10,6 +10,7 @@ defmodule BldgServer.Residents do
   alias BldgServer.ResidentsAuth
   alias BldgServer.Buildings
 
+  require Logger
 
   # alias BldgServerWeb.Router.Helpers, as: Routes
 
@@ -36,6 +37,20 @@ defmodule BldgServer.Residents do
     q = from r in Resident, where: r.flr == ^flr
     Repo.all(q)
   end
+
+  @doc """
+  Returns all residents (including nested) inside a given flr.
+
+  Returns empty list if no such resident exists.
+  """
+  def list_all_residents_in_flr(flr) do
+    # Delimiter-safe: exact floor or a strict sub-path, so ".../l1" doesn't also
+    # match ".../l10". See Buildings.list_all_bldgs_in_flr/2.
+    q = from r in Resident,
+        where: r.flr == ^flr or like(r.flr, ^"#{flr}/%")
+    Repo.all(q)
+  end
+
 
   @doc """
   Gets a single resident.
@@ -84,9 +99,13 @@ defmodule BldgServer.Residents do
 
   """
   def create_resident(attrs \\ %{}) do
-    %Resident{}
-    |> Resident.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %Resident{}
+      |> Resident.changeset(attrs)
+      |> Repo.insert()
+
+    broadcast_resident_change(result, "resident_created")
+    result
   end
 
   @doc """
@@ -102,9 +121,13 @@ defmodule BldgServer.Residents do
 
   """
   def update_resident(%Resident{} = resident, attrs) do
-    resident
-    |> Resident.changeset(attrs)
-    |> Repo.update()
+    result =
+      resident
+      |> Resident.changeset(attrs)
+      |> Repo.update()
+
+    broadcast_resident_change(result, "resident_updated")
+    result
   end
 
   @doc """
@@ -120,7 +143,20 @@ defmodule BldgServer.Residents do
 
   """
   def delete_resident(%Resident{} = resident) do
-    Repo.delete(resident)
+    flr = resident.flr
+    resident_id = resident.id
+    result = Repo.delete(resident)
+
+    case result do
+      {:ok, _} ->
+        if flr do
+          BldgServer.Buildings.broadcast_to_floor_and_ancestors(flr, "resident_deleted", %{id: resident_id})
+        end
+      _ ->
+        :ok
+    end
+
+    result
   end
 
   def start_email_verification(%Resident{} = resident, ip_addr) do
@@ -186,28 +222,77 @@ defmodule BldgServer.Residents do
     update_resident(resident, changes)
   end
 
-  def enter_bldg(%Resident{} = resident, address, bldg_url) do
-    {initial_x, initial_y} = {8, 40}  # TODO read from config, per bldg type
-    changes = %{flr: "#{address}/l0", flr_url: "#{bldg_url}/l0", location: "#{address}/l0/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y}
-    update_resident(resident, changes)
+  def calculate_nesting_depth_from_address(address) do
+    BldgServer.Address.inside_depth(BldgServer.Address.parse!(address))
   end
 
-  def exit_bldg(%Resident{} = resident, address, bldg_url) do
+  def enter_bldg_flr(%Resident{} = resident, address, bldg_url, flr_level, post_enter_x, post_enter_y) do
+    {initial_x, initial_y} = {post_enter_x, post_enter_y}
+    nesting_depth = calculate_nesting_depth_from_address(address)
+    case address do
+      "g" ->
+        changes = %{flr: "#{address}", flr_url: "#{bldg_url}", location: "#{address}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: 0}
+        update_resident(resident, changes)
+      _ ->
+        changes = %{flr: "#{address}/l#{flr_level}", flr_url: "#{bldg_url}/l#{flr_level}", location: "#{address}/l#{flr_level}/b(#{initial_x},#{initial_y})", x: initial_x, y: initial_y, nesting_depth: nesting_depth}
+        update_resident(resident, changes)
+    end
+  end
+
+
+  def enter_bldg(%Resident{} = resident, address, bldg_url, post_enter_x, post_enter_y) do
+    enter_bldg_flr(resident, address, bldg_url, 0, post_enter_x, post_enter_y)
+  end
+
+  def enter_bldg(%Resident{} = resident, address, bldg_url) do
+    enter_bldg_flr(resident, address, bldg_url, 0, 0, 0)
+  end
+
+  def exit_bldg(%Resident{} = resident, address, bldg_url, post_exit_x, post_exit_y) do
     # get the container flr
     container_flr = Buildings.get_container_flr(address)
     container_flr_url = Buildings.get_container_flr_url(bldg_url)
 
-    # determine the location next to the door of the bldg exited
-    {x, y} = Buildings.extract_coords(address)
-    new_x = x
-    new_y = y + 6
+    # When the client doesn't supply a meaningful post-exit position (0/nil),
+    # derive the landing spot from the exited bldg's own coords so the player
+    # lands next to the bldg instead of at the floor origin. Honor explicit
+    # non-zero coords as-is.
+    {new_x, new_y} =
+      case {post_exit_x, post_exit_y} do
+        {x, y} when x in [0, nil] and y in [0, nil] ->
+          {bx, by} = Buildings.extract_coords(address)
+          {bx, by + 2}
 
-    changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y}
+        {x, y} ->
+          {x, y}
+      end
+
+    nesting_depth = calculate_nesting_depth_from_address(container_flr)
+
+    changes = %{flr: container_flr, flr_url: container_flr_url, location: "#{container_flr}/b(#{new_x},#{new_y})", x: new_x, y: new_y, nesting_depth: nesting_depth}
     update_resident(resident, changes)
   end
 
   def change_dir(%Resident{} = resident, direction) do
     changes = %{direction: direction}
+    update_resident(resident, changes)
+  end
+
+  @doc """
+  Updates the resident's view mode preference. Same broadcast path as the
+  other update actions — the floor topic gets `resident_updated` so other
+  clients of the same user can mirror the new mode in-place.
+  """
+  def change_view_mode(%Resident{} = resident, view_mode) do
+    # Enforce the bird-eye invariant at runtime (it was previously only set by a
+    # one-time migration): bird-eye residents always face 180. Other modes leave
+    # the direction untouched.
+    changes =
+      case view_mode do
+        "bird_eye" -> %{view_mode: view_mode, direction: 180}
+        _ -> %{view_mode: view_mode}
+      end
+
     update_resident(resident, changes)
   end
 
@@ -221,13 +306,15 @@ defmodule BldgServer.Residents do
 
   def is_command(msg_text), do: String.at(msg_text, 0) == "/"
 
-
   def say(%Resident{} = resident, msg) do
     {_, text} = msg
     |> Map.merge(%{"say_time" => System.system_time(:millisecond)})
     |> JSON.encode()
 
-    new_prev_messages = append_message_to_list(resident.previous_messages, text)
+    prev_messages = Utils.limit_list_to(resident.previous_messages, 10)
+    IO.puts("~~~~~ reduced list size to: #{Enum.count(prev_messages)}")
+
+    new_prev_messages = append_message_to_list(prev_messages, text)
     changes = %{previous_messages: new_prev_messages}
     result = update_resident(resident, changes)
 
@@ -256,4 +343,13 @@ defmodule BldgServer.Residents do
   def change_resident(%Resident{} = resident) do
     Resident.changeset(resident, %{})
   end
+
+  defp broadcast_resident_change({:ok, %Resident{} = resident}, event) do
+    if resident.flr do
+      payload = BldgServerWeb.FloorChannel.serialize_resident(resident)
+      BldgServer.Buildings.broadcast_to_floor_and_ancestors(resident.flr, event, payload)
+    end
+  end
+
+  defp broadcast_resident_change(_, _), do: :ok
 end

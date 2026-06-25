@@ -41,10 +41,39 @@ defmodule BldgServerWeb.RoadController do
     end
   end
 
+  @doc """
+  Deletes every road in a floor subtree (the given flr and any nested floor).
+  Used by the file-system-battery to clear stale roads before a re-render so
+  layout-shifted roads don't orphan/accumulate. Body: %{"flr" => "<address>"}.
+  """
+  def delete_in_flr(conn, %{"flr" => flr}) do
+    deleted =
+      flr
+      |> Relations.list_all_roads_in_flr()
+      |> Enum.reduce(0, fn road, acc ->
+        # Delete by struct; skip rows already removed (StaleEntryError).
+        try do
+          Relations.delete_road(road)
+          acc + 1
+        rescue
+          Ecto.StaleEntryError -> acc
+        end
+      end)
+
+    json(conn, %{deleted: deleted, flr: flr})
+  end
+
   def look(conn, %{"flr" => flr}) do
     # unescape the flr parameter
     decoded_flr = URI.decode(flr)
     roads = Relations.list_roads_in_flr(decoded_flr)
+    render(conn, "look.json", roads: roads)
+  end
+
+  def scan(conn, %{"flr" => flr}) do
+    # unescape the flr parameter
+    decoded_flr = URI.decode(flr)
+    roads = Relations.list_all_roads_in_flr(decoded_flr)
     render(conn, "look.json", roads: roads)
   end
 

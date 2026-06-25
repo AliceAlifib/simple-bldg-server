@@ -24,6 +24,7 @@ defmodule BldgServer.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import BldgServer.DataCase
+      import BldgServer.Factory
     end
   end
 

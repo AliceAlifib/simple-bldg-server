@@ -80,5 +80,42 @@ defmodule BldgServer.ResidentsTest do
       resident = resident_fixture()
       assert %Ecto.Changeset{} = Residents.change_resident(resident)
     end
+
+    test "exit_bldg/5 falls back to the exited bldg's coords when post-exit is (0,0)" do
+      resident =
+        resident_fixture(%{
+          flr: "g/b(5,3)/l0",
+          flr_url: "g/some_url/l0",
+          location: "g/b(5,3)/l0/b(1,1)",
+          x: 1,
+          y: 1
+        })
+
+      assert {:ok, %Resident{} = updated} =
+               Residents.exit_bldg(resident, "g/b(5,3)", "g/some_url", 0, 0)
+
+      assert updated.x == 5
+      assert updated.y == 5
+      assert updated.location == "g/b(5,5)"
+      assert updated.flr == "g"
+    end
+
+    test "exit_bldg/5 honors explicit non-zero post-exit coords" do
+      resident =
+        resident_fixture(%{
+          flr: "g/b(5,3)/l0",
+          flr_url: "g/some_url/l0",
+          location: "g/b(5,3)/l0/b(1,1)",
+          x: 1,
+          y: 1
+        })
+
+      assert {:ok, %Resident{} = updated} =
+               Residents.exit_bldg(resident, "g/b(5,3)", "g/some_url", 8, 9)
+
+      assert updated.x == 8
+      assert updated.y == 9
+      assert updated.location == "g/b(8,9)"
+    end
   end
 end

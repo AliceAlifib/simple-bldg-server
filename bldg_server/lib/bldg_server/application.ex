@@ -5,7 +5,24 @@ defmodule BldgServer.Application do
 
   use Application
 
+  require Logger
+
   def start(_type, _args) do
+    # Route :logger error/crash events into Sentry. Only attaches when a DSN
+    # is configured — local dev without SENTRY_DSN is a no-op.
+    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{
+      config: %{metadata: [:file, :line]}
+    })
+
+    # Log Redis configuration for debugging
+    redis_host = System.fetch_env!("REDIS_HOST")
+    redis_password = System.fetch_env!("REDIS_PWD")
+    redis_port = System.fetch_env!("REDIS_PORT") || "6379"
+
+    Logger.info(
+      "Redis configuration - Host: #{redis_host}, Port: #{redis_port}, Pwd: #{redis_password}"
+    )
+
     # List all child processes to be supervised
     children = [
       # Start the Ecto repository
@@ -17,7 +34,20 @@ defmodule BldgServer.Application do
       BldgServerWeb.BldgCommandExecutor,
       BldgServerWeb.BatteryChatDispatcher,
       # Start the http client
-      {Finch, name: FinchClient}
+      {Finch, name: FinchClient},
+      # Start the redis connection
+      {Redix,
+       [
+         host: redis_host,
+         # Treat a blank REDIS_PWD as "no auth" so the client doesn't send
+         # `AUTH ""` (which a password-less Redis rejects). Prod sets a real
+         # password, so its behavior is unchanged; this only helps the common
+         # password-less local/CI Redis used by the test suite.
+         password: if(redis_password in [nil, ""], do: nil, else: redis_password),
+         port: String.to_integer(redis_port),
+         socket_opts: [:inet6],
+         name: :redix
+       ]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

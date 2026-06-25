@@ -2,10 +2,10 @@ use Mix.Config
 
 # Configure your database
 config :bldg_server, BldgServer.Repo,
-  username: "postgres",
-  password: "postgres",
+  username: System.get_env("DB_USER", "postgres"),
+  password: System.get_env("DB_PASSWORD", "postgres"),
   database: "bldg_server_test",
-  hostname: "localhost",
+  hostname: System.get_env("DB_HOST", "localhost"),
   pool: Ecto.Adapters.SQL.Sandbox
 
 # We don't run a server during test. If one is required,
@@ -13,6 +13,14 @@ config :bldg_server, BldgServer.Repo,
 config :bldg_server, BldgServerWeb.Endpoint,
   http: [port: 4002],
   server: false
+
+# Capture outbound mail in-memory instead of hitting SendGrid. Tests can then
+# assert delivery with `Bamboo.Test`'s `assert_delivered_email/1`.
+config :bldg_server, BldgServer.Mailer, adapter: Bamboo.TestAdapter
+
+# Point the DGraph client at a local default; staging tests override this to a
+# Bypass port via Application.put_env at runtime.
+config :bldg_server, :dgraph_url, "http://localhost:8080"
 
 # Print only warnings and errors during test
 config :logger, level: :warn

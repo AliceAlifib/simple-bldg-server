@@ -78,6 +78,16 @@ defmodule BldgServer.Batteries do
   end
 
   @doc """
+  Gets the attached battery bound to a bldg by its url, or `nil` if none is
+  attached. Non-raising counterpart to `get_attached_battery_by_bldg_url!/1`,
+  used by the chat dispatcher to decide whether to route a message to a
+  bldg-specific (attached) battery callback or fall back to the registered pool.
+  """
+  def get_attached_battery_by_bldg_url(bldg_url) do
+    Repo.get_by(Battery, is_attached: true, bldg_url: bldg_url)
+  end
+
+  @doc """
   Gets a single battery by it's container bldg's address.
 
   Raises `Ecto.NoResultsError` if the Battery does not exist.
@@ -160,5 +170,35 @@ defmodule BldgServer.Batteries do
   """
   def change_battery(%Battery{} = battery) do
     Battery.changeset(battery, %{})
+  end
+
+  # --- Battery Registry (Redis) ---
+
+  @registry_prefix "battery_registry:"
+
+  @doc """
+  Registers a callback_url for a given battery_type in the Redis registry.
+  Returns {:ok, count} where count is the number of new members added (0 if already existed).
+  """
+  def register_battery(battery_type, callback_url) do
+    key = @registry_prefix <> battery_type
+    Redix.command(:redix, ["SADD", key, callback_url])
+  end
+
+  @doc """
+  Unregisters a callback_url for a given battery_type from the Redis registry.
+  Returns {:ok, count} where count is the number of members removed (0 if not found).
+  """
+  def unregister_battery(battery_type, callback_url) do
+    key = @registry_prefix <> battery_type
+    Redix.command(:redix, ["SREM", key, callback_url])
+  end
+
+  @doc """
+  Returns all registered callback_urls for a given battery_type.
+  """
+  def get_registered_callbacks(battery_type) do
+    key = @registry_prefix <> battery_type
+    Redix.command(:redix, ["SMEMBERS", key])
   end
 end

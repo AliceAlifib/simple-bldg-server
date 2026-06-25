@@ -26,7 +26,7 @@ defmodule BldgServer.ResidentsAuthTest do
 
     test "get_session!/1 returns the session with given id" do
       session = session_fixture()
-      assert ResidentsAuth.get_session!(session.id) == session
+      assert ResidentsAuth.get_session!(session.session_id) == session
     end
 
     test "create_session/1 with valid data creates a session" do
@@ -57,13 +57,13 @@ defmodule BldgServer.ResidentsAuthTest do
     test "update_session/2 with invalid data returns error changeset" do
       session = session_fixture()
       assert {:error, %Ecto.Changeset{}} = ResidentsAuth.update_session(session, @invalid_attrs)
-      assert session == ResidentsAuth.get_session!(session.id)
+      assert session == ResidentsAuth.get_session!(session.session_id)
     end
 
     test "delete_session/1 deletes the session" do
       session = session_fixture()
       assert {:ok, %Session{}} = ResidentsAuth.delete_session(session)
-      assert_raise Ecto.NoResultsError, fn -> ResidentsAuth.get_session!(session.id) end
+      assert_raise Ecto.NoResultsError, fn -> ResidentsAuth.get_session!(session.session_id) end
     end
 
     test "change_session/1 returns a session changeset" do

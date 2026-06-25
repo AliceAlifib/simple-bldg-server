@@ -1,0 +1,56 @@
+# Dev/staging Fly.io config. Deploys to the existing `bldg-server` app in the
+# `personal` Fly org (which now serves as the dev environment).
+#
+# Deploy with: fly deploy -c bldg_server/fly.dev.toml
+#
+# PREREQUISITE before first deploy with this file: migrate the secrets that
+# are currently in plaintext in bldg_server/fly.toml [env] over to Fly's
+# secrets store, e.g.:
+#   fly secrets set -a bldg-server \
+#     DB_PASSWORD=... DB_USER=... \
+#     REDIS_PASSWORD=... REDIS_PWD=... \
+#     SENDGRID_API_KEY=... SECRET_KEY_BASE=...
+# Otherwise the app will start with missing env vars and fail at runtime.
+#
+# The secrets in the current fly.toml on master are considered compromised —
+# rotate SendGrid, Upstash, and the DB password when you migrate them.
+
+app = 'bldg-server'
+primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+
+[build]
+
+[deploy]
+  release_command = '/app/bin/migrate'
+
+[env]
+  PHX_HOST = 'bldg-server.fly.dev'
+  PORT = '8080'
+  APP_HOSTNAME = 'bldg-server.fly.dev'
+  APP_PORT = '8080'
+  DB_HOST = 'bldg-server-db.internal'
+  DB_NAME = 'bldg_server'
+  DB_PORT = '5433'
+  DB_SSL = 'false'
+  REDIS_HOST = 'fly-alicein-redis.upstash.io'
+  REDIS_PORT = 6379
+  DGRAPH_URL = 'https://dgraph-db.fly.dev'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 1000
+    soft_limit = 1000
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
