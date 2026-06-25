@@ -44,7 +44,7 @@ Production release runs migrations via `/app/bin/migrate`.
 ### Key Subsystems
 
 - **BldgCommandExecutor** (`lib/bldg_server_web/bldg_command_executor.ex`) — Processes chat commands ("say" actions) in buildings, broadcasts via Phoenix PubSub on the "chat" topic.
-- **BatteryChatDispatcher** (`lib/bldg_server_web/battery_chat_dispatcher.ex`) — Forwards chat messages to attached batteries' webhook endpoints.
+- **BatteryChatDispatcher** (`lib/bldg_server_web/battery_chat_dispatcher.ex`) — Forwards chat messages to batteries' webhook endpoints (attached batteries directly, others via a registered Redis pool; see Battery Dispatch).
 - **DgraphClient** (`lib/bldg_server/dgraph_client.ex`) — Client for the DGraph graph database, used for staging/transient data.
 - **StagingController** — Manages temporary/staged data in the graph DB with namespace/entity_type organization.
 - **Notifications** (`lib/bldg_server/notifications.ex`) — Propagates creation/update events up the container hierarchy.
@@ -58,6 +58,8 @@ The hierarchical address is central to the data model:
 - Nested floors: `g/b(x,y)/l0/b(x,y)` — buildings contain floors which contain more buildings
 - Delimiter: `"/"`
 - Each bldg has: `address`, `flr` (parent floor), `flr_url`, `entity_type`, `x`, `y`
+
+Parsing is centralized in **`BldgServer.Address`** (`lib/bldg_server/address.ex`) — a *total* parser that turns a path into typed segments (`:ground`, `{:bldg, x, y}`, `{:floor, n}`, or `{:named, s}`), with `to_string/1` round-tripping. The scattered string-slicing primitives (`extract_coords`, `get_container`, `extract_flr_level`, `calculate_nesting_depth`) delegate to it; it also provides `ancestor?/2` (structural, not text-prefix — so `l1` is not an ancestor of `l10`) and `rebase/3` (re-root a subtree). **Dual hierarchy:** an `address` uses coordinate `b(x,y)` bldg-segments, while a `bldg_url` uses **name** segments (built as `flr_url/name`, e.g. `g/team/l0/task1`); both alternate with `l<n>` floor segments, which is why `{:named, s}` exists and why relocation rebases the two on different roots.
 
 ### Data Stores
 
@@ -97,6 +99,21 @@ Passwordless email-based auth:
 2. `GET /residents/verify?token=X` → verifies the token (24h max age via `Phoenix.Token`), marks session `VERIFIED`
 3. Sessions track `ip_address` and `last_activity_time`; previous sessions are marked `REPLACED`
 
+### Resident Action Protocol
+
+`POST /v1/residents/act` is a single endpoint that fans out via pattern-matching on `action_type` in `ResidentController.act/2` (each clause delegates to a `Residents` function): `MOVE`, `TURN`, `SAY`, `ENTER_BLDG`, `ENTER_BLDG_FLR`, `EXIT_BLDG`, and `change_view_mode`. Adding an action means adding a matching `act/2` clause plus its context function; there is no generic dispatcher. State changes persist via `Residents.update_resident/2`, which broadcasts `resident_updated` on the floor channel so other clients reconcile.
+
+`view_mode` (resident field, `bird_eye` | `immersive`, default `bird_eye`, validated by `validate_inclusion`) is a per-user UI preference set through the `change_view_mode` action. Clients hydrate it from the resident payload on login and from `resident_updated` broadcasts. Bird-eye residents have `direction` pinned to `180` — `change_view_mode/2` re-pins it at runtime (not just via the one-time backfill migration).
+
+### Battery Dispatch
+
+`BatteryChatDispatcher` (GenServer subscribed to the "chat" PubSub topic) routes each `new_message` to the battery bldgs on the message's floor (`Buildings.get_batteries_in_floor/1`) via two tiers:
+
+1. **Attached batteries** — a battery bound to one specific bldg (`is_attached: true`, matched by `bldg_url` via `Batteries.get_attached_battery_by_bldg_url/1`, e.g. a per-sprite file-system-battery). The message goes straight to that battery's own `callback_url`.
+2. **Registered pool (fallback)** — remaining (non-attached) battery bldgs are deduped by `battery_type` (`Buildings.extract_battery_type/1`), and each type dispatches to a *random* registered `callback_url` looked up from Redis (`Batteries.get_registered_callbacks/1`).
+
+A bldg handled in tier 1 is excluded from tier 2, so attached batteries never also receive the shared type-keyed broadcast.
+
 ### Visual Language
 
 The `visual_language` field (map) on container bldgs decouples `entity_type` from 3D rendering. `Buildings.default_visual_language/0` defines 50+ entity-type-to-3D-object mappings (e.g., `"team"` → `"buildingWithStorefront"`). Containers set this on their floors; child bldgs inherit the mapping to determine their visual representation.
@@ -110,9 +127,10 @@ The staging API uses DGraph with DQL queries. The `namespace` concept is stored 
 ## Key Conventions
 
 - JSON API only (no HTML views) — all controllers render JSON via view modules in `views/`.
-- Auto-placement logic in `Buildings.create_bldg/1` handles coordinate collision by shifting x+1 and retrying.
+- Bldgs carry a `width`/`height` footprint (default 1×1; `{x,y}` is the bottom-left origin, covering `x..x+width-1` × `y..y+height-1`). Auto-placement (`Buildings.decide_on_location/1` → `find_free_footprint/5`) scans the floor for the first clear rectangle that doesn't overlap an existing footprint (`footprints_overlap?/2`, `occupied_footprints/1`), falling back to a random slot + the unique-address create-retry when the floor is full. The retry path jitters the bldg's coords (`jitter_bldg_location/1`) on a unique-address constraint violation.
 - Composite entity types (e.g., "team", "project") have predefined floor heights in `BldgController`.
 - Building creation triggers hierarchical notifications up the container chain.
 - GenServers (`BldgCommandExecutor`, `BatteryChatDispatcher`) subscribe to Phoenix PubSub "chat" topic — commands are broadcast, not called directly.
 - `Buildings.delete_bldg_cascade/1` deletes nested descendants deepest-first plus their roads before the target; residents inside deleted bldgs are left untouched. `DELETE /v1/bldgs/:address` and the `/delete bldg {name}` chat command both route through it (authorized via `is_authorized_owner?/2`).
 - Roads cache `from_address`/`to_address` and endpoint coordinates at creation. `Buildings.update_bldg/2` diffs the `address` on update and, on change, calls `Relations.cascade_bldg_relocation/3` to rewrite matching endpoints (following the flr when the road lived on the bldg's prior floor) and re-broadcast `road_updated`. Skipping this leaves roads visually dangling at the old position.
+- **Container relocation**: when `update_bldg/2` sees a container's `address` change, `Buildings.relocate_bldg_cascade/3` re-homes the whole nested subtree via `Address.rebase/3` — each descendant bldg's `address`/`flr` is rebased on the new address root and its `bldg_url`/`flr_url` on the new bldg_url root (the two move independently when the container is name-aliased), and roads on descendant floors have their `flr`/endpoints rebased (endpoint coords are floor-local, so preserved). Descendant lookup is delimiter-safe (`list_all_bldgs_in_flr/2` matches `flr == X` or `"X/%"`, never a bare `"X%"` prefix), so sibling subtrees are untouched.
