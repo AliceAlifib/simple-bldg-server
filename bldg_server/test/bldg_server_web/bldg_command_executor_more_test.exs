@@ -149,6 +149,39 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
       assert child.state == "Todo"
     end
 
+    test "parses width and height into the bldg footprint", %{msg: msg} do
+      {:ok, child} =
+        BldgCommandExecutor.execute_command(
+          ["/create", "task", "bldg", "with", "name", "t", "width", "3", "height", "2"],
+          msg
+        )
+
+      assert child.width == 3
+      assert child.height == 2
+    end
+
+    test "defaults to a 1x1 footprint when dimensions are omitted, and a non-integer is ignored", %{msg: msg} do
+      {:ok, child} =
+        BldgCommandExecutor.execute_command(
+          ["/create", "task", "bldg", "with", "name", "t", "width", "wide"],
+          msg
+        )
+
+      assert child.width == 1
+      assert child.height == 1
+    end
+
+    test "summary stops at the width keyword rather than swallowing it", %{msg: msg} do
+      {:ok, child} =
+        BldgCommandExecutor.execute_command(
+          ["/create", "task", "bldg", "with", "name", "t", "summary", "a", "tall", "one", "height", "4"],
+          msg
+        )
+
+      assert child.summary == "a tall one"
+      assert child.height == 4
+    end
+
     test "rejects a non-owner", %{msg: msg} do
       assert_raise RuntimeError, ~r/not authorized/, fn ->
         BldgCommandExecutor.execute_command(
