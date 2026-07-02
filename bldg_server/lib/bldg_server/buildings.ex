@@ -20,7 +20,7 @@ defmodule BldgServer.Buildings do
     "storage" => %{"3d_object" => "storageBuilding", "flr_height" => "0.7", "flr0_height" => "0.03"},
     "costs" => %{"3d_object" => "chestOfDrawers", "flr_height" => "2.57", "flr0_height" => "0.067"},
     "inbox" => %{"3d_object" => "tray", "flr_height" => "2.57", "flr0_height" => "0.067"},
-    "sales" => %{"3d_object" => "bookCabinet", "flr_height" => "3.0", "flr0_height" => "1.3"},
+    "sales" => %{"3d_object" => "bookCabinet", "flr_height" => "0.5", "flr0_height" => "-0.12"},
     "goal" => %{"3d_object" => "livingRoomTable", "flr_height" => "1.08", "flr0_height" => "1.11"},
     "purpose" => %{"3d_object" => "whiteboard"},
     "cantata" => %{"3d_object" => "presentationStand"},

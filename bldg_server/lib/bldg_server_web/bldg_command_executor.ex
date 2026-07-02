@@ -86,34 +86,46 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     else
       # TODO return proper errors
       flr_url = msg["say_flr_url"]
-      bldg1_url = "#{flr_url}#{Buildings.address_delimiter()}#{name1}"
-      bldg1 = Buildings.get_by_bldg_url(bldg1_url)
-      from_addr = bldg1.address
-      {from_x, from_y} = Buildings.extract_coords(from_addr)
-      bldg2_url = "#{flr_url}#{Buildings.address_delimiter()}#{name2}"
-      bldg2 = Buildings.get_by_bldg_url(bldg2_url)
-      to_addr = bldg2.address
-      {to_x, to_y} = Buildings.extract_coords(to_addr)
+      bldg1 = Buildings.get_by_bldg_url("#{flr_url}#{Buildings.address_delimiter()}#{name1}")
+      bldg2 = Buildings.get_by_bldg_url("#{flr_url}#{Buildings.address_delimiter()}#{name2}")
 
-      road = %{
-        "flr" => msg["say_flr"],
-        "flr_url" => msg["say_flr_url"],
-        "from_address" => from_addr,
-        "to_address" => to_addr,
-        "from_x" => from_x,
-        "from_y" => from_y,
-        "to_x" => to_x,
-        "to_y" => to_y,
-        "owners" => [msg["resident_email"]],
-        "color" => color,
-        "road_class" => road_class || "road"
-      }
+      cond do
+        is_nil(bldg1) or is_nil(bldg2) ->
+          # A road endpoint isn't on this floor: a race-late create (the bldg's
+          # relocate echo hasn't landed) or a stale re-emit (the bldg moved or was
+          # removed by a later render). Skip gracefully instead of crashing on
+          # nil.address — that raised an Internal Server Error (HTTP 500) for what
+          # is a benign, self-correcting condition: batteries re-emit roads
+          # idempotently, so a transient miss heals on a later pass.
+          IO.puts("~~ /connect skipped: endpoint not found on #{flr_url} (#{name1} and/or #{name2})")
+          {:ok, :skipped}
 
-      # Idempotent: re-emitting an identical road (watch / re-render passes, or
-      # the organize-check's road re-emission) must not stack duplicate records.
-      case Relations.find_road(msg["say_flr"], from_addr, to_addr) do
-        nil -> Relations.create_road(road)
-        existing -> {:ok, existing}
+        true ->
+          from_addr = bldg1.address
+          {from_x, from_y} = Buildings.extract_coords(from_addr)
+          to_addr = bldg2.address
+          {to_x, to_y} = Buildings.extract_coords(to_addr)
+
+          road = %{
+            "flr" => msg["say_flr"],
+            "flr_url" => msg["say_flr_url"],
+            "from_address" => from_addr,
+            "to_address" => to_addr,
+            "from_x" => from_x,
+            "from_y" => from_y,
+            "to_x" => to_x,
+            "to_y" => to_y,
+            "owners" => [msg["resident_email"]],
+            "color" => color,
+            "road_class" => road_class || "road"
+          }
+
+          # Idempotent: re-emitting an identical road (watch / re-render passes, or
+          # the organize-check's road re-emission) must not stack duplicate records.
+          case Relations.find_road(msg["say_flr"], from_addr, to_addr) do
+            nil -> Relations.create_road(road)
+            existing -> {:ok, existing}
+          end
       end
     end
   end
