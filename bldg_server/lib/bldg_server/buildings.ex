@@ -365,6 +365,21 @@ defmodule BldgServer.Buildings do
     case cs.errors do
       [] ->
         result = Repo.insert(cs)
+
+        # FAIL LOUD: command execution is async, so the HTTP caller already got
+        # its 200 — a failed INSERT must be logged clearly here or it vanishes
+        # silently (the "artifact created but never rendered" class of bug).
+        case result do
+          {:error, failed_cs} ->
+            Logger.error(
+              "Failed to create bldg #{inspect(created_bldg_url)}: " <>
+                "#{inspect(failed_cs.errors)}"
+            )
+
+          _ ->
+            :ok
+        end
+
         notify_bldg_created(result, "bldg_created", created_bldg_ids, triggering_chat_msg)
         broadcast_bldg_change(result, "bldg_created")
         result
