@@ -4,6 +4,13 @@ defmodule BldgServer.Buildings.Bldg do
 
   @sizes ~w(XS S M L XL XXL)
 
+  # address/bldg_url/web_url are `:text` (no varchar cap) but are UNIQUE-INDEXED,
+  # and a Postgres btree index entry can't exceed ~2704 bytes. Guard well under
+  # that so an over-long value fails with a CLEAR changeset error (routed through
+  # create_bldg's error logging) instead of crashing the insert — which used to
+  # no-op silently. See the widen_bldg_text_columns migration.
+  @max_indexed_len 2000
+
   schema "bldgs" do
     field(:address, :string)
     field(:category, :string)
@@ -79,6 +86,9 @@ defmodule BldgServer.Buildings.Bldg do
       :flr_level,
       :nesting_depth
     ])
+    |> validate_length(:bldg_url, max: @max_indexed_len)
+    |> validate_length(:address, max: @max_indexed_len)
+    |> validate_length(:web_url, max: @max_indexed_len)
     |> validate_inclusion(:size, @sizes)
     |> validate_number(:width, greater_than: 0)
     |> validate_number(:height, greater_than: 0)
