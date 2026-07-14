@@ -72,11 +72,12 @@ defmodule BldgServerWeb.BldgCommandExecutor do
   # TODO handle the case where there are multiple bldgs for the same website - check the ones owned by the user in order to resolve
   def execute_command(["/connect", "between", name1, "and", name2 | rest], msg) do
     # create a road between the given bldgs, inside the given flr.
-    # Optional tail: `with color <name> and class <highway|road|lane|path>`
-    # (either order; either one alone also valid). Defaults: color=nil,
-    # class="road" — bare `/connect between A and B` renders unchanged.
+    # Optional tail: `with color <name> and class <highway|road|lane|path>
+    # and curve <auto|never>` (any order/subset). Defaults: color=nil,
+    # class="road", curve="auto" — bare `/connect between A and B` renders
+    # unchanged.
 
-    {color, road_class} = parse_connect_options(rest)
+    {color, road_class, curve} = parse_connect_options(rest)
 
     # validate that the actor resident/bldg has the sufficient permissions
     container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
@@ -117,7 +118,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
             "to_y" => to_y,
             "owners" => [msg["resident_email"]],
             "color" => color,
-            "road_class" => road_class || "road"
+            "road_class" => road_class || "road",
+            "curve" => curve || "auto"
           }
 
           # Idempotent: re-emitting an identical road (watch / re-render passes, or
@@ -130,23 +132,30 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     end
   end
 
-  # Parse the optional `with color X and class Y` (or `with class Y and color X`)
-  # tail of a `/connect between A and B` command. Returns {color, class} where
-  # either may be nil if not specified.
-  defp parse_connect_options([]), do: {nil, nil}
-  defp parse_connect_options(["with" | rest]), do: parse_connect_kwargs(rest, nil, nil)
-  defp parse_connect_options(_), do: {nil, nil}
+  # Parse the optional `with color X and class Y and curve Z` tail of a
+  # `/connect between A and B` command (any kwarg order/subset). Returns
+  # {color, class, curve} where each may be nil if not specified. Also accepts
+  # a tail starting with `and` (`... and class Y`) — older bldg-battery
+  # clients emitted that form when sending a class without a color, and the
+  # class was silently dropped.
+  defp parse_connect_options([]), do: {nil, nil, nil}
+  defp parse_connect_options(["with" | rest]), do: parse_connect_kwargs(rest, nil, nil, nil)
+  defp parse_connect_options(["and" | rest]), do: parse_connect_kwargs(rest, nil, nil, nil)
+  defp parse_connect_options(_), do: {nil, nil, nil}
 
-  defp parse_connect_kwargs([], color, klass), do: {color, klass}
+  defp parse_connect_kwargs([], color, klass, curve), do: {color, klass, curve}
 
-  defp parse_connect_kwargs(["color", v | rest], _color, klass),
-    do: parse_connect_kwargs(skip_and(rest), v, klass)
+  defp parse_connect_kwargs(["color", v | rest], _color, klass, curve),
+    do: parse_connect_kwargs(skip_and(rest), v, klass, curve)
 
-  defp parse_connect_kwargs(["class", v | rest], color, _klass),
-    do: parse_connect_kwargs(skip_and(rest), color, v)
+  defp parse_connect_kwargs(["class", v | rest], color, _klass, curve),
+    do: parse_connect_kwargs(skip_and(rest), color, v, curve)
 
-  defp parse_connect_kwargs([_ | rest], color, klass),
-    do: parse_connect_kwargs(rest, color, klass)
+  defp parse_connect_kwargs(["curve", v | rest], color, klass, _curve),
+    do: parse_connect_kwargs(skip_and(rest), color, klass, v)
+
+  defp parse_connect_kwargs([_ | rest], color, klass, curve),
+    do: parse_connect_kwargs(rest, color, klass, curve)
 
   defp skip_and(["and" | rest]), do: rest
   defp skip_and(rest), do: rest

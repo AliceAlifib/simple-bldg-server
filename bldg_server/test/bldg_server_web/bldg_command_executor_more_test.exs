@@ -73,12 +73,48 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
       assert road.road_class == "highway"
     end
 
-    test "a bare connect defaults class to \"road\" and leaves color nil", %{msg: msg} do
+    test "parses `with class Y` alone (no color)", %{msg: msg} do
+      {:ok, road} =
+        BldgCommandExecutor.execute_command(
+          ["/connect", "between", "a", "and", "b", "with", "class", "highway"],
+          msg
+        )
+
+      assert road.color == nil
+      assert road.road_class == "highway"
+    end
+
+    test "accepts the legacy bare `and class Y` tail (old bldg-battery clients)", %{msg: msg} do
+      {:ok, road} =
+        BldgCommandExecutor.execute_command(
+          ["/connect", "between", "a", "and", "b", "and", "class", "path"],
+          msg
+        )
+
+      assert road.color == nil
+      assert road.road_class == "path"
+    end
+
+    test "a bare connect defaults class to \"road\", curve to \"auto\", color nil", %{msg: msg} do
       {:ok, road} =
         BldgCommandExecutor.execute_command(["/connect", "between", "a", "and", "b"], msg)
 
       assert road.color == nil
       assert road.road_class == "road"
+      assert road.curve == "auto"
+    end
+
+    test "parses `curve never` alongside color and class", %{msg: msg} do
+      {:ok, road} =
+        BldgCommandExecutor.execute_command(
+          ["/connect", "between", "a", "and", "b", "with", "color", "blue", "and",
+           "class", "lane", "and", "curve", "never"],
+          msg
+        )
+
+      assert road.color == "blue"
+      assert road.road_class == "lane"
+      assert road.curve == "never"
     end
 
     test "rejects a non-owner", %{msg: msg} do
