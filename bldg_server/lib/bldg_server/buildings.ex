@@ -1041,9 +1041,23 @@ defmodule BldgServer.Buildings do
     Map.put(entity, "nesting_depth", depth)
   end
 
+  # Stairs bldgs (variant "stairs<N>") get the backward per-floor indentation
+  # their shell prefab is built with, so the client shifts each floor's
+  # contents to match. Must equal StairsBldgGeometry.FLR_INDENT in the
+  # bldg-client repo.
+  @stairs_flr_indent "0.6"
+
+  defp maybe_add_stairs_indent(data, %{"variant" => "stairs" <> _}),
+    do: Map.put(data, :flr_indent, @stairs_flr_indent)
+
+  defp maybe_add_stairs_indent(data, _entity), do: data
+
   def add_composite_bldg_metadata(%{"entity_type" => "ground"} = entity) do
     vl_entry = @default_visual_language["ground"]
-    default_data = %{flr_height: vl_entry["flr_height"], flr0_height: vl_entry["flr0_height"]}
+
+    default_data =
+      %{flr_height: vl_entry["flr_height"], flr0_height: vl_entry["flr0_height"]}
+      |> maybe_add_stairs_indent(entity)
 
     combined_data =
       case Map.get(entity, "data") do
@@ -1064,7 +1078,10 @@ defmodule BldgServer.Buildings do
   def add_composite_bldg_metadata(%{"entity_type" => entity_type} = entity) do
     case Map.get(@default_visual_language, entity_type) do
       %{"flr_height" => flr_height, "flr0_height" => flr0_height} ->
-        data = %{flr_height: flr_height, flr0_height: flr0_height}
+        data =
+          %{flr_height: flr_height, flr0_height: flr0_height}
+          |> maybe_add_stairs_indent(entity)
+
         {_, data_json} = JSON.encode(data)
 
         visual_language = Map.get(entity, "visual_language") || @default_visual_language

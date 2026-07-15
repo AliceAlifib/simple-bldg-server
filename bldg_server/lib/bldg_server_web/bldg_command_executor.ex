@@ -636,6 +636,16 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     |> Enum.map(&String.trim/1)
   end
 
+  # data carries a JSON object as a string; reject anything that doesn't
+  # parse rather than store a broken value the client can't render (e.g. a
+  # command truncated by the chat input length limit).
+  defp cast_edit_value("data", value) do
+    case JSON.decode(value) do
+      {:ok, decoded} when is_map(decoded) -> value
+      _ -> raise "Invalid value for data - must be a JSON object, got: #{value}"
+    end
+  end
+
   defp cast_edit_value(_field, value), do: value
 
   def execute_command(["/delete", "bldg", name], msg) do
