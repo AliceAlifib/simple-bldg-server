@@ -3,6 +3,11 @@ defmodule BldgServer.Relations.Road do
   import Ecto.Changeset
 
   @road_classes ~w(highway road lane path)
+  # "auto" lets the client decide when to bend the road (its planner curves
+  # curve-eligible classes around obstacles/overlaps); "never" pins the road
+  # straight regardless — e.g. colored metric lanes that intentionally overlay
+  # the fishbone spine.
+  @curve_modes ~w(auto never)
 
   schema "roads" do
     field :flr, :string
@@ -15,6 +20,7 @@ defmodule BldgServer.Relations.Road do
     field :owners, {:array, :string}
     field :color, :string
     field :road_class, :string, default: "road"
+    field :curve, :string, default: "auto"
 
     timestamps()
   end
@@ -32,9 +38,11 @@ defmodule BldgServer.Relations.Road do
       :to_y,
       :owners,
       :color,
-      :road_class
+      :road_class,
+      :curve
     ])
     |> validate_required([:flr, :from_address, :to_address, :from_x, :from_y, :to_x, :to_y])
     |> validate_inclusion(:road_class, @road_classes)
+    |> validate_inclusion(:curve, @curve_modes)
   end
 end

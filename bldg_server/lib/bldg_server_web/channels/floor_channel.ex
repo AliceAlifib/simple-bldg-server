@@ -105,7 +105,8 @@ defmodule BldgServerWeb.FloorChannel do
       to_y: road.to_y,
       owners: road.owners,
       color: road.color,
-      road_class: road.road_class
+      road_class: road.road_class,
+      curve: road.curve
     }
   end
 end
