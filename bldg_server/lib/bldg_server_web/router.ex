@@ -90,6 +90,10 @@ defmodule BldgServerWeb.Router do
     # Mint a resident bearer token for the embedded web client. The service
     # vouches that the resident is authenticated on its side (Google OAuth).
     post("/residents/:id/token", ResidentController, :mint_token)
+
+    # Provision a scoped battery credential (the provisioner injects it into a
+    # per-sprite battery, so no shared master key lands in a sprite).
+    post("/batteries/credentials", BatteryController, :provision_credential)
   end
 
   # --- Battery credential provisioning --------------------------------------

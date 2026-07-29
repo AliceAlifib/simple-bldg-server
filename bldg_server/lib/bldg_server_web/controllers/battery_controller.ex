@@ -37,6 +37,27 @@ defmodule BldgServerWeb.BatteryController do
     end
   end
 
+  @doc """
+  Provisions a scoped battery API key (service-authenticated; see router). Used
+  by the alice-in-goals provisioner to mint a per-sprite battery's credential and
+  inject it into the sprite — so no shared master secret ever lands in a sprite.
+  Returns the plaintext key once. Does NOT register a callback (the battery does
+  that itself with its key).
+  """
+  def provision_credential(conn, %{"battery_type" => battery_type, "owner_email" => owner_email}) do
+    case Batteries.provision_battery_credential(battery_type, owner_email) do
+      {:ok, key, _cred} ->
+        conn
+        |> put_status(:created)
+        |> json(%{api_key: key, battery_type: battery_type, owner_email: owner_email})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Failed to provision credential", details: inspect(changeset.errors)})
+    end
+  end
+
   def unregister(conn, %{"battery" => %{"battery_type" => battery_type, "callback_url" => callback_url}}) do
     with :ok <- authorize_battery_type(conn, battery_type),
          {:ok, _count} <- Batteries.unregister_battery(battery_type, callback_url) do

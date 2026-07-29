@@ -126,6 +126,21 @@ defmodule BldgServerWeb.ResidentAuthTest do
       assert ResidentAuth.resident_from_token(token).id == r.id
     end
 
+    test "provision_credential mints a battery key for the service (and 401s without it)", %{conn: conn} do
+      # requires the service key
+      no_auth = post(conn, "/v1/batteries/credentials", %{"battery_type" => "fsb", "owner_email" => "o@example.com"})
+      assert json_response(no_auth, 401)
+
+      ok =
+        conn
+        |> auth("test-service-key")
+        |> post("/v1/batteries/credentials", %{"battery_type" => "fsb", "owner_email" => "o@example.com"})
+
+      key = json_response(ok, 201)["api_key"]
+      assert is_binary(key)
+      assert BldgServer.Batteries.authenticate_battery_key(key).battery_type == "fsb"
+    end
+
     test "service key authorizes a protected mutation under enforcement", %{conn: conn} do
       Application.put_env(:bldg_server, :enforce_auth, true)
       # Without any credential this create would 401; with the service key it
