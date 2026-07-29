@@ -44,7 +44,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       raise "Unauthorized"
     else
       Buildings.update_bldg(bldg, %{"owners" => [email | bldg.owners]})
-      IO.puts("owner added to bldg #{bldg_url}: #{email}")
+      Logger.info("owner added to bldg #{bldg_url}")
     end
   end
 
@@ -63,7 +63,7 @@ defmodule BldgServerWeb.BldgCommandExecutor do
       else
         new_owners = List.delete_at(bldg.owners, pos)
         Buildings.update_bldg(bldg, %{"owners" => new_owners})
-        IO.puts("owner removed from bldg #{bldg_url}: #{email}")
+        Logger.info("owner removed from bldg #{bldg_url}")
       end
     end
   end

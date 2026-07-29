@@ -106,9 +106,12 @@ defmodule BldgServerWeb.StagingControllerTest do
       assert resp["success"] == true
       assert resp["data"] == %{"all" => [%{"uid" => "0x1", "name" => "a"}]}
 
-      # The namespace is interpolated into the DQL filter.
-      assert_received {:dgraph_request, "/query", dql}
-      assert dql =~ ~s|eq(ns, "myns")|
+      # The namespace is passed as a bound DQL variable ($ns), not interpolated,
+      # so an attacker-controlled value can't break out of the query string.
+      assert_received {:dgraph_request, "/query", body}
+      decoded = Jason.decode!(body)
+      assert decoded["query"] =~ "eq(ns, $ns)"
+      assert decoded["variables"] == %{"$ns" => "myns"}
     end
 
     test "POST /v1/staging/query passes the raw DQL through", %{conn: conn, stub: stub} do

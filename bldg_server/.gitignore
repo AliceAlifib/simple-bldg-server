@@ -33,3 +33,13 @@ bldg_server-*.tar
 
 .DS_Store
 .vscode
+
+# Secret-bearing / local-only files — must never be committed.
+# (SendGrid/DB/Redis creds were previously found in *.env.bak*, docker*.env,
+# fly*.toml.bak*, and *.patch files sitting untracked in the working tree.)
+*.env.bak*
+*.bak*
+docker*.env
+fly*.toml.bak*
+*.patch
+.sprite/

@@ -8,8 +8,14 @@ defmodule BldgServerWeb.FloorChannel do
   require Logger
 
   def join("floor:" <> flr, _params, socket) do
-    Logger.info("[FloorChannel] Client joined floor:#{flr}")
-    {:ok, assign(socket, :flr, flr)}
+    # Require an authenticated resident to join (any resident may join a public
+    # floor). Dual-run: when :enforce_auth is off, anonymous joins are allowed.
+    if socket.assigns[:current_resident] || not BldgServerWeb.ResidentAuth.enforce_auth?() do
+      Logger.info("[FloorChannel] Client joined floor:#{flr}")
+      {:ok, assign(socket, :flr, flr)}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
   end
 
   def handle_in("request_scan", _params, socket) do
@@ -23,7 +29,7 @@ defmodule BldgServerWeb.FloorChannel do
 
     push(socket, "scan_result", %{
       bldgs: Enum.map([container | bldgs], &serialize_bldg/1),
-      residents: Enum.map(residents, &serialize_resident/1),
+      residents: Enum.map(residents, &serialize_resident_public/1),
       roads: Enum.map(roads, &serialize_road/1)
     })
 
@@ -69,10 +75,15 @@ defmodule BldgServerWeb.FloorChannel do
     }
   end
 
-  def serialize_resident(resident) do
+  # Public resident shape broadcast over the floor channel to every joiner.
+  # DELIBERATELY omits `email` and `session_id`: the channel is world-readable
+  # (any socket can join a floor), and session_id is a credential used by the
+  # verification_status flow — neither may leak to other clients. Full detail
+  # (incl. email) is served only to the resident themselves via the
+  # authenticated REST endpoint.
+  def serialize_resident_public(resident) do
     %{
       id: resident.id,
-      email: resident.email,
       alias: resident.alias,
       name: resident.name,
       home_bldg: resident.home_bldg,
@@ -86,7 +97,6 @@ defmodule BldgServerWeb.FloorChannel do
       previous_messages: resident.previous_messages,
       other_attributes: resident.other_attributes,
       nesting_depth: resident.nesting_depth,
-      session_id: resident.session_id,
       last_login_at: resident.last_login_at,
       updated_at: resident.updated_at,
       view_mode: resident.view_mode

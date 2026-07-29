@@ -44,18 +44,23 @@ defmodule BldgServerWeb.FloorChannelTest do
     end
   end
 
-  describe "serialize_resident/1 and serialize_road/1 (golden)" do
-    test "resident key set matches ResidentView" do
+  describe "serialize_resident_public/1 and serialize_road/1 (golden)" do
+    test "public resident key set omits email and session_id" do
       r = resident(%{view_mode: "bird_eye", direction: 180})
-      out = FloorChannel.serialize_resident(r)
+      out = FloorChannel.serialize_resident_public(r)
 
+      # DELIBERATELY excludes email and session_id: the floor channel is
+      # world-readable, so neither PII nor the session credential may be
+      # broadcast. See FloorChannel.serialize_resident_public/1.
       expected =
-        ~w(id email alias name home_bldg is_online location flr flr_url x y direction
-           previous_messages other_attributes nesting_depth session_id last_login_at
+        ~w(id alias name home_bldg is_online location flr flr_url x y direction
+           previous_messages other_attributes nesting_depth last_login_at
            updated_at view_mode)a
         |> Enum.sort()
 
       assert Map.keys(out) |> Enum.sort() == expected
+      refute Map.has_key?(out, :email)
+      refute Map.has_key?(out, :session_id)
       assert out.view_mode == "bird_eye"
     end
 
@@ -64,12 +69,55 @@ defmodule BldgServerWeb.FloorChannelTest do
       out = FloorChannel.serialize_road(rd)
 
       expected =
-        ~w(id flr from_address to_address from_x from_y to_x to_y owners color road_class)a
+        ~w(id flr from_address to_address from_x from_y to_x to_y owners color road_class curve)a
         |> Enum.sort()
 
       assert Map.keys(out) |> Enum.sort() == expected
       assert out.color == "blue"
       assert out.road_class == "lane"
+    end
+  end
+
+  describe "UserSocket authentication" do
+    setup do
+      prev = Application.get_env(:bldg_server, :enforce_auth)
+      on_exit(fn -> Application.put_env(:bldg_server, :enforce_auth, prev) end)
+      :ok
+    end
+
+    defp verified_token do
+      r = resident(%{})
+      sid = Ecto.UUID.generate()
+
+      {:ok, _session} =
+        BldgServer.ResidentsAuth.create_session(%{
+          "session_id" => sid,
+          "resident_id" => r.id,
+          "email" => r.email,
+          "status" => BldgServer.ResidentsAuth.verified(),
+          "ip_address" => "127.0.0.1",
+          "last_activity_time" => NaiveDateTime.utc_now()
+        })
+
+      {BldgServer.Token.generate_auth_token(r.id, sid), r}
+    end
+
+    test "enforcing: connect without a token is denied" do
+      Application.put_env(:bldg_server, :enforce_auth, true)
+      assert :error = connect(BldgServerWeb.UserSocket, %{})
+    end
+
+    test "enforcing: connect with a valid token assigns the resident" do
+      Application.put_env(:bldg_server, :enforce_auth, true)
+      {token, r} = verified_token()
+      assert {:ok, socket} = connect(BldgServerWeb.UserSocket, %{"token" => token})
+      assert socket.assigns.current_resident.id == r.id
+    end
+
+    test "dual-run: connect without a token is accepted as anonymous" do
+      Application.put_env(:bldg_server, :enforce_auth, false)
+      assert {:ok, socket} = connect(BldgServerWeb.UserSocket, %{})
+      assert socket.assigns.current_resident == nil
     end
   end
 

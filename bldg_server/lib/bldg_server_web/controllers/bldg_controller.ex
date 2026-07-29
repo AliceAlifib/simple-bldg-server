@@ -3,6 +3,7 @@ defmodule BldgServerWeb.BldgController do
 
   alias BldgServer.Buildings
   alias BldgServer.Buildings.Bldg
+  alias BldgServerWeb.ResidentAuth
 
   action_fallback(BldgServerWeb.FallbackController)
 
@@ -12,18 +13,33 @@ defmodule BldgServerWeb.BldgController do
   end
 
   def create(conn, %{"bldg" => bldg_params}) do
-    IO.puts("~~~ create")
-    IO.inspect(bldg_params)
+    # Bind owners to the authenticated creator (never trust body-supplied owners);
+    # authorize creation against the parent floor's container when present.
+    bldg_params = bind_owners(conn, bldg_params)
 
-    # Let the action_fallback render 422 for {:error, changeset}; previously the
-    # error branch only IO.puts'd and returned a non-conn, crashing the request.
-    with {:ok, %Bldg{} = bldg} <- Buildings.create_bldg(bldg_params) do
+    with :ok <- authorize_create(conn, bldg_params),
+         {:ok, %Bldg{} = bldg} <- Buildings.create_bldg(bldg_params) do
       conn
       |> put_status(:created)
       |> put_resp_header("location", Routes.bldg_path(conn, :show, bldg))
       |> render("show.json", bldg: bldg)
     end
   end
+
+  # When authenticated, owners is the creator's email; owner changes thereafter
+  # go only through the /add owner command path. In dual-run (no current
+  # resident) the body value is kept so existing clients are unaffected.
+  defp bind_owners(conn, params) do
+    case conn.assigns[:current_resident] do
+      %{email: email} -> Map.put(params, "owners", [email])
+      _ -> params
+    end
+  end
+
+  defp authorize_create(conn, %{"flr" => flr}) when is_binary(flr) and flr != "",
+    do: ResidentAuth.authorize_container(conn, flr)
+
+  defp authorize_create(_conn, _params), do: :ok
 
   def show(conn, %{"address" => address}) do
     # unescape the address parameter
@@ -34,8 +50,11 @@ defmodule BldgServerWeb.BldgController do
 
   def update(conn, %{"address" => address, "bldg" => bldg_params}) do
     bldg = Buildings.get_bldg!(address)
+    # owners are not mutable through update (only via the /add owner command).
+    safe_params = Map.drop(bldg_params, ["owners"])
 
-    with {:ok, %Bldg{} = bldg} <- Buildings.update_bldg(bldg, bldg_params) do
+    with :ok <- ResidentAuth.authorize_bldg(conn, bldg),
+         {:ok, %Bldg{} = bldg} <- Buildings.update_bldg(bldg, safe_params) do
       render(conn, "show.json", bldg: bldg)
     end
   end
@@ -43,7 +62,8 @@ defmodule BldgServerWeb.BldgController do
   def delete(conn, %{"address" => address}) do
     bldg = Buildings.get_bldg!(address)
 
-    with {:ok, %Bldg{}} <- Buildings.delete_bldg_cascade(bldg) do
+    with :ok <- ResidentAuth.authorize_bldg(conn, bldg),
+         {:ok, %Bldg{}} <- Buildings.delete_bldg_cascade(bldg) do
       send_resp(conn, :no_content, "")
     end
   end
@@ -110,7 +130,8 @@ defmodule BldgServerWeb.BldgController do
     decoded_address = URI.decode(address)
     bldg = Buildings.get_bldg!(decoded_address)
 
-    with {:ok, %Bldg{} = updated} <- Buildings.add_favorite_view_point(bldg, view_point) do
+    with :ok <- ResidentAuth.authorize_bldg(conn, bldg),
+         {:ok, %Bldg{} = updated} <- Buildings.add_favorite_view_point(bldg, view_point) do
       render(conn, "show.json", bldg: updated)
     end
   end
@@ -189,7 +210,9 @@ defmodule BldgServerWeb.BldgController do
         |> render("show.json", bldg: upd_bldg)
 
       {:error, e} ->
-        IO.inspect(e)
+        # Let the fallback controller render the error instead of returning a
+        # non-conn (which crashed the request).
+        {:error, e}
     end
   end
 end

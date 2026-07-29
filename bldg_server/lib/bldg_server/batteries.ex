@@ -7,6 +7,7 @@ defmodule BldgServer.Batteries do
   alias BldgServer.Repo
 
   alias BldgServer.Batteries.Battery
+  alias BldgServer.Batteries.BatteryCredential
 
   @doc """
   Returns the list of batteries.
@@ -181,8 +182,16 @@ defmodule BldgServer.Batteries do
   Returns {:ok, count} where count is the number of new members added (0 if already existed).
   """
   def register_battery(battery_type, callback_url) do
-    key = @registry_prefix <> battery_type
-    Redix.command(:redix, ["SADD", key, callback_url])
+    # SSRF guard: the registered callback_url is later POSTed to by the chat
+    # dispatcher, so reject internal/loopback/link-local targets at registration.
+    case BldgServer.SafeUrl.validate(callback_url) do
+      :ok ->
+        key = @registry_prefix <> battery_type
+        Redix.command(:redix, ["SADD", key, callback_url])
+
+      {:error, reason} ->
+        {:error, "unsafe callback_url: #{reason}"}
+    end
   end
 
   @doc """
@@ -200,5 +209,39 @@ defmodule BldgServer.Batteries do
   def get_registered_callbacks(battery_type) do
     key = @registry_prefix <> battery_type
     Redix.command(:redix, ["SMEMBERS", key])
+  end
+
+  # --- Service credentials (machine-caller auth) ----------------------------
+
+  @doc """
+  Provisions an API key for a battery. Generates a random key, stores only its
+  SHA-256 hash, and returns `{:ok, key, credential}` with the plaintext key
+  (shown to the caller exactly once). The key authenticates subsequent battery
+  requests and identifies the battery by `battery_type` + `owner_email`.
+  """
+  def provision_battery_credential(battery_type, owner_email) do
+    key = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+
+    attrs = %{
+      "battery_type" => battery_type,
+      "owner_email" => owner_email,
+      "api_key_hash" => hash_api_key(key)
+    }
+
+    case %BatteryCredential{} |> BatteryCredential.changeset(attrs) |> Repo.insert() do
+      {:ok, credential} -> {:ok, key, credential}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  @doc "Looks up the battery credential for a presented API key (or nil)."
+  def authenticate_battery_key(key) when is_binary(key) do
+    Repo.get_by(BatteryCredential, api_key_hash: hash_api_key(key))
+  end
+
+  def authenticate_battery_key(_), do: nil
+
+  defp hash_api_key(key) do
+    :crypto.hash(:sha256, key) |> Base.encode16(case: :lower)
   end
 end

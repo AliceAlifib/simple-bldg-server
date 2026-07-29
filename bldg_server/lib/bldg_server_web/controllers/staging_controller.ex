@@ -87,10 +87,17 @@ defmodule BldgServerWeb.StagingController do
     end
   end
 
+  # Dgraph type identifiers: a letter/underscore start, then word chars. Used to
+  # validate entity_type, which is interpolated into type() below (a DQL variable
+  # can parameterize the ns value but not a type() argument).
+  @entity_type_re ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/
+
   def read_by_namespace(conn, %{"namespace" => namespace}) do
+    # ns is passed as a bound DQL variable ($ns), not interpolated, so a value
+    # containing quotes/braces can't break out of the query.
     dql = """
-    {
-      all(func: eq(ns, "#{namespace}")) {
+    query all($ns: string) {
+      all(func: eq(ns, $ns)) {
         uid
         dgraph.type
         expand(_all_) {
@@ -110,7 +117,7 @@ defmodule BldgServerWeb.StagingController do
     }
     """
 
-    case DgraphClient.query(dql) do
+    case DgraphClient.query(dql, %{"$ns" => namespace}) do
       {:ok, data} ->
         conn |> put_status(:ok) |> json(%{success: true, data: data})
 
@@ -120,12 +127,12 @@ defmodule BldgServerWeb.StagingController do
   end
 
   def read_by_type(conn, %{"namespace" => namespace, "entity_type" => entity_type}) do
-    dql = """
-    {
-      all(func: eq(ns, "#{namespace}")) @filter(type(#{entity_type})) {
-        uid
-        dgraph.type
-        expand(_all_) {
+    if Regex.match?(@entity_type_re, entity_type) do
+      # ns is a bound variable; entity_type is validated against a strict
+      # identifier pattern before being placed into type().
+      dql = """
+      query all($ns: string) {
+        all(func: eq(ns, $ns)) @filter(type(#{entity_type})) {
           uid
           dgraph.type
           expand(_all_) {
@@ -134,20 +141,28 @@ defmodule BldgServerWeb.StagingController do
             expand(_all_) {
               uid
               dgraph.type
-              expand(_all_)
+              expand(_all_) {
+                uid
+                dgraph.type
+                expand(_all_)
+              }
             }
           }
         }
       }
-    }
-    """
+      """
 
-    case DgraphClient.query(dql) do
-      {:ok, data} ->
-        conn |> put_status(:ok) |> json(%{success: true, data: data})
+      case DgraphClient.query(dql, %{"$ns" => namespace}) do
+        {:ok, data} ->
+          conn |> put_status(:ok) |> json(%{success: true, data: data})
 
-      {:error, reason} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{success: false, error: reason})
+        {:error, reason} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{success: false, error: reason})
+      end
+    else
+      conn
+      |> put_status(:bad_request)
+      |> json(%{success: false, error: "Invalid entity_type"})
     end
   end
 

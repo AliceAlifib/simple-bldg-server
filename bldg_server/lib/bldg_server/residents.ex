@@ -46,8 +46,9 @@ defmodule BldgServer.Residents do
   def list_all_residents_in_flr(flr) do
     # Delimiter-safe: exact floor or a strict sub-path, so ".../l1" doesn't also
     # match ".../l10". See Buildings.list_all_bldgs_in_flr/2.
+    flr_subtree = Utils.escape_like_pattern(flr) <> "/%"
     q = from r in Resident,
-        where: r.flr == ^flr or like(r.flr, ^"#{flr}/%")
+        where: r.flr == ^flr or like(r.flr, ^flr_subtree)
     Repo.all(q)
   end
 
@@ -168,7 +169,7 @@ defmodule BldgServer.Residents do
     # TODO Don't hardcode the schema
     verification_url = "https://#{host}/v1/residents/verify?token=#{token}"
     BldgServer.Notifications.send_login_verification_email(resident, verification_url)
-    IO.puts("Login started for #{resident.email}")
+    Logger.info("Login started for resident ##{resident.id}")
     {:verification_started, session.session_id}
   end
 
@@ -194,7 +195,7 @@ defmodule BldgServer.Residents do
     else
       [{session_id, updated_at}] = recent_session
       if Utils.is_newer_than_x_minutes_ago(updated_at, 60*24*7) do
-        IO.puts("Login done for #{resident.email} - already has valid session")
+        Logger.info("Login done for resident ##{resident.id} - already has valid session")
         {:has_valid_session, session_id}
       else
         start_email_verification(resident, ip_addr)
@@ -346,7 +347,7 @@ defmodule BldgServer.Residents do
 
   defp broadcast_resident_change({:ok, %Resident{} = resident}, event) do
     if resident.flr do
-      payload = BldgServerWeb.FloorChannel.serialize_resident(resident)
+      payload = BldgServerWeb.FloorChannel.serialize_resident_public(resident)
       BldgServer.Buildings.broadcast_to_floor_and_ancestors(resident.flr, event, payload)
     end
   end

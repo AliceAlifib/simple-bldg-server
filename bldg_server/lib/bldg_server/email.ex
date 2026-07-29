@@ -10,7 +10,6 @@ defmodule BldgServer.Email do
 
 
   def login_verification_email(email_address, verification_url) do
-    IO.inspect(email_address)
     base_email()
     |> to(email_address)
     |> subject("fromTeal login verification")

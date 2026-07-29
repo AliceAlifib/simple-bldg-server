@@ -6,8 +6,8 @@ defmodule BldgServer.BatteriesTest do
   describe "batteries" do
     alias BldgServer.Batteries.Battery
 
-    @valid_attrs %{battery_type: "some battery_type", battery_vendor: "some battery_vendor", battery_version: "some battery_version", bldg_url: "some bldg_url", callback_url: "some callback_url", direct_only: true, flr: "some flr", is_attached: true}
-    @update_attrs %{battery_type: "some updated battery_type", battery_vendor: "some updated battery_vendor", battery_version: "some updated battery_version", bldg_url: "some updated bldg_url", callback_url: "some updated callback_url", direct_only: false, flr: "some updated flr", is_attached: false}
+    @valid_attrs %{battery_type: "some battery_type", battery_vendor: "some battery_vendor", battery_version: "some battery_version", bldg_url: "some bldg_url", callback_url: "http://localhost:9001/cb", direct_only: true, flr: "some flr", is_attached: true}
+    @update_attrs %{battery_type: "some updated battery_type", battery_vendor: "some updated battery_vendor", battery_version: "some updated battery_version", bldg_url: "some updated bldg_url", callback_url: "http://localhost:9002/cb", direct_only: false, flr: "some updated flr", is_attached: false}
     @invalid_attrs %{battery_type: nil, battery_vendor: nil, battery_version: nil, bldg_url: nil, callback_url: nil, direct_only: nil, flr: nil, is_attached: nil}
 
     def battery_fixture(attrs \\ %{}) do
@@ -49,7 +49,7 @@ defmodule BldgServer.BatteriesTest do
       assert battery.battery_vendor == "some battery_vendor"
       assert battery.battery_version == "some battery_version"
       assert battery.bldg_url == "some bldg_url"
-      assert battery.callback_url == "some callback_url"
+      assert battery.callback_url == "http://localhost:9001/cb"
       assert battery.direct_only == true
       assert battery.flr == "some flr"
       assert battery.is_attached == true
@@ -66,7 +66,7 @@ defmodule BldgServer.BatteriesTest do
       assert battery.battery_vendor == "some updated battery_vendor"
       assert battery.battery_version == "some updated battery_version"
       assert battery.bldg_url == "some updated bldg_url"
-      assert battery.callback_url == "some updated callback_url"
+      assert battery.callback_url == "http://localhost:9002/cb"
       assert battery.direct_only == false
       assert battery.flr == "some updated flr"
       assert battery.is_attached == false

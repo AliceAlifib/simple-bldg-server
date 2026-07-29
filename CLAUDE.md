@@ -19,6 +19,7 @@ mix phx.server            # Start dev server (HTTP :4000, HTTPS :4443)
 mix test                  # Run all tests
 mix test test/path_test.exs          # Run a single test file
 mix test test/path_test.exs:42       # Run a specific test by line
+mix coveralls               # Run tests with coverage (ExCoveralls)
 ```
 
 The `mix test` alias auto-runs `ecto.create` and `ecto.migrate` before tests (test DB: `bldg_server_test`).
@@ -71,33 +72,43 @@ Parsing is centralized in **`BldgServer.Address`** (`lib/bldg_server/address.ex`
 ### API Structure
 
 All API routes are under `/v1/` (see `lib/bldg_server_web/router.ex`):
-- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing, `relocate_to`, `favorite_view_points`
+- `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing, `relocate_to`, `favorite_view_points`, `delete_in_flr` (bulk)
 - `/residents/*` — Auth (login/verify), resident actions, `look`/`scan`
-- `/roads/*` — Relationship management, `look`/`scan`
+- `/roads/*` — Relationship management, `look`/`scan`, `delete_in_flr` (bulk)
 - `/batteries/*` — Register/unregister, attach/detach, act
 - `/staging/*` — Read/write/query staged data by namespace
 
-`look/:flr` returns direct children of a floor; `scan/:flr` returns all nested descendants.
+`look/:flr` returns direct children of a floor; `scan/:flr` returns all nested descendants. The `delete_in_flr` endpoints bulk-delete every road/bldg in a floor subtree (used by batteries' clear-and-repopulate re-render flow); they delete by struct and rescue `StaleEntryError` so duplicate or already-cascaded rows don't abort the sweep.
 
 Bldgs carry a `favorite_view_points` array of named camera poses (`address`, `direction`, `size_delta`, `camera_vertical_angle`); appended via `POST /v1/bldgs/:address/favorite_view_points`.
 
 ## Deployment
 
-Deployed to Fly.io via split dev/prod stacks (`fly.dev.toml`, `fly.prod.toml` at the repo root), primary region SJC. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`. Sentry is wired in for error reporting (commit `0341b20`).
+Deployed to Fly.io via split dev/prod stacks (`bldg_server/fly.dev.toml`, `bldg_server/fly.prod.toml`), primary region SJC. GitHub Actions: `elixir.yml` runs `mix test` on pushes/PRs to master; `deploy.yml` auto-deploys master to the dev stack on push, while prod deploys are manual (`workflow_dispatch` with target `prod`). Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`, plus the auth secrets `MAGIC_LINK_SALT`, `AUTH_TOKEN_SALT`, and (optional) `ENFORCE_AUTH`, `BATTERY_PROVISION_TOKEN`, `CORS_ORIGINS`, `BATTERY_URL_ALLOWED_HOSTS`. No secret material lives in source — all signing keys/salts are env-sourced in `config/runtime.exs` (dev/test fall back to clearly non-secret defaults; prod fails loud). Sentry is wired in for error reporting, with a `BldgServer.SentryScrubber` `before_send` hook that redacts PII/credentials.
 
 ### Ownership & Authorization
 
 - Bldgs and Roads have an `owners` field (array of email strings).
 - `Buildings.is_authorized_owner?/2` checks direct ownership first, then walks up the container hierarchy (via `bldg_url`) to check ancestor ownership — an owner of a parent building can operate on all nested children.
 - Floor segments are skipped when walking up, since floors don't have their own bldg entries.
-- Used by `BldgCommandExecutor` for `/add owner`, `/remove owner`, `/connect`, `/edit`, and `/delete bldg` commands and by controllers for mutation authorization.
+- Used by `BldgCommandExecutor` for `/add owner`, `/remove owner`, `/connect`, `/edit`, and `/delete bldg` commands, and wired into the HTTP controllers via `ResidentAuth.authorize_bldg/2` / `authorize_container/2` for every bldg/road mutation (`create`/`update`/`delete`/`relocate`/`build`/`add_favorite_view_point`). On create, `owners` is bound server-side to the authenticated resident (body-supplied `owners`/`session_id`/`email` are stripped — mass-assignment defense); ownership checks and this binding are gated by `:enforce_auth` (dual-run).
+
+### SSRF & injection guards
+
+- `BldgServer.SafeUrl` validates every battery `callback_url` (in the `Battery` changeset, `register_battery`, and at the dispatch sink) — rejects non-`http(s)` schemes and hosts resolving to loopback/link-local (incl. `169.254.169.254`)/private ranges. Gated by `:block_private_callback_urls` (strict in prod; relaxed in dev/test for loopback), with a `BATTERY_URL_ALLOWED_HOSTS` prod allow-list.
+- Staging DQL reads pass the namespace as a bound DQL variable (`$ns`) and validate `entity_type` against a strict identifier regex (no interpolation). Floor-subtree `LIKE` queries escape `%`/`_` in user input via `Utils.escape_like_pattern/1`.
 
 ### Authentication Flow
 
-Passwordless email-based auth:
+Passwordless email-based auth, then a bearer token for the API/WS:
 1. `POST /residents/login` → creates a Session (status: `PENDING-VERIFICATION`) and emails a magic link via SendGrid
-2. `GET /residents/verify?token=X` → verifies the token (24h max age via `Phoenix.Token`), marks session `VERIFIED`
-3. Sessions track `ip_address` and `last_activity_time`; previous sessions are marked `REPLACED`
+2. `GET /residents/verify?token=X` → verifies the magic-link token (24h max age via `Phoenix.Token`), marks session `VERIFIED`
+3. The app polls `GET /residents/verification_status` (email + session_id); once `VERIFIED` the response carries a **bearer `token`** (also returned by `login` when a valid session is reused). Sessions track `ip_address`/`last_activity_time`; previous sessions are marked `REPLACED`.
+4. The client sends that token as `Authorization: Bearer <token>` on every REST call and as a `token` connect param on the WebSocket. `BldgServer.Token` mints/verifies it (7-day max age, carries `resident_id` + `session_id`); the `sessions` table is the revocation list (a `REPLACED`/missing session rejects the token).
+
+**Auth plugs & pipelines** (`BldgServerWeb.ResidentAuth`, `BldgServerWeb.BatteryAuth`): the router (`router.ex`) splits routes into public (login/verify/verification_status), resident-authenticated (all reads + mutations + `act`), battery-authenticated (register/unregister/attach/detach, `batteries/act`, `staging/*`, `delete_in_flr`), and battery-provisioning (`register`). `fetch_current_resident`/`fetch_current_battery` assign identity; `require_*` reject unauthenticated calls.
+
+**Dual-run rollout**: the `:enforce_auth` app flag (default `false`, overridable via `ENFORCE_AUTH` env) gates all rejection. When `false`, the plugs and `authorize_*` helpers assign identity and log what they *would* block but never reject — so pre-token clients keep working; when `true`, missing/invalid credentials get 401 and ownership failures 403. Flip it once the Unity client and batteries send tokens. **Batteries** (machine callers that can't do magic-link) authenticate with a service API key: `POST /batteries/register` (gated by the `BATTERY_PROVISION_TOKEN`) provisions a key via `Batteries.provision_battery_credential/2` (only the SHA-256 hash is stored, in `battery_credentials`), returned once as `api_key`.
 
 ### Resident Action Protocol
 
@@ -118,7 +129,9 @@ A bldg handled in tier 1 is excluded from tier 2, so attached batteries never al
 
 The `visual_language` field (map) on container bldgs decouples `entity_type` from 3D rendering. `Buildings.default_visual_language/0` defines 50+ entity-type-to-3D-object mappings (e.g., `"team"` → `"buildingWithStorefront"`). Containers set this on their floors; child bldgs inherit the mapping to determine their visual representation.
 
-Bldgs also carry purely-presentational styling fields decoupled from semantic state: `color` (free-form token, validated against a palette in the client), `size` (T-shirt: XS/S/M/L/XL/XXL), and `variant`. These were historically overloaded onto `state`/`category`; migration `20260505120100` backfills the split. Roads similarly accept optional `color` and `class` fields for styled overlays.
+Bldgs also carry purely-presentational styling fields decoupled from semantic state: `color` (free-form token, validated against a palette in the client), `size` (T-shirt: XS/S/M/L/XL/XXL), and `variant`. These were historically overloaded onto `state`/`category`; migration `20260505120100` backfills the split. Roads similarly accept optional `color` and `road_class` (`highway|road|lane|path`) fields for styled overlays, plus `curve` (`auto` default | `never`) — `auto` lets the client's planner bend curve-eligible roads around obstacles, `never` pins them straight (e.g. metric lanes intentionally overlaying the fishbone spine).
+
+Stairs bldgs (variant `stairs<N>`) get a `flr_indent` value injected into their composite metadata (`Buildings.maybe_add_stairs_indent/2`) so the client shifts each floor's contents to match the stepped shell prefab; the constant must equal `StairsBldgGeometry.FLR_INDENT` in the bldg-client repo.
 
 ### DGraph Staging
 
@@ -129,6 +142,9 @@ The staging API uses DGraph with DQL queries. The `namespace` concept is stored 
 - JSON API only (no HTML views) — all controllers render JSON via view modules in `views/`.
 - Bldgs carry a `width`/`height` footprint (default 1×1; `{x,y}` is the bottom-left origin, covering `x..x+width-1` × `y..y+height-1`). Auto-placement (`Buildings.decide_on_location/1` → `find_free_footprint/5`) scans the floor for the first clear rectangle that doesn't overlap an existing footprint (`footprints_overlap?/2`, `occupied_footprints/1`), falling back to a random slot + the unique-address create-retry when the floor is full. The retry path jitters the bldg's coords (`jitter_bldg_location/1`) on a unique-address constraint violation.
 - Composite entity types (e.g., "team", "project") have predefined floor heights in `BldgController`.
+- `address`/`bldg_url`/`web_url` are `:text` columns (deep nesting overflows varchar(255)) but are unique-indexed, so `Bldg.changeset` caps them at 2000 chars (Postgres btree entries max ~2704 bytes) to fail with a clear changeset error. Because chat-command execution is async (HTTP caller already got a 200), `create_bldg` logs insert failures loudly — silent insert no-ops previously cost full debug cycles.
+- `/connect` is idempotent: `Relations.find_road/3` looks up an existing road by `(flr, from, to)` before creating, so battery re-render passes don't stack duplicates. Optional tail `with color X and class Y and curve Z` (any order/subset). Note roads have a `flr` column, not `flr_url`.
+- `/edit ... data ...` validates the value parses as a JSON object before storing — a broken string (e.g. truncated by the chat input length limit) would silently wipe the bldg's rendering attributes on the client.
 - Building creation triggers hierarchical notifications up the container chain.
 - GenServers (`BldgCommandExecutor`, `BatteryChatDispatcher`) subscribe to Phoenix PubSub "chat" topic — commands are broadcast, not called directly.
 - `Buildings.delete_bldg_cascade/1` deletes nested descendants deepest-first plus their roads before the target; residents inside deleted bldgs are left untouched. `DELETE /v1/bldgs/:address` and the `/delete bldg {name}` chat command both route through it (authorized via `is_authorized_owner?/2`).
