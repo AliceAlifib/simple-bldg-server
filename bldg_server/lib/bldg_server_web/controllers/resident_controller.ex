@@ -101,28 +101,41 @@ defmodule BldgServerWeb.ResidentController do
   """
   def mint_token(conn, %{"id" => id}) do
     resident = Residents.get_resident!(id)
-    ip_addr = conn.remote_ip |> :inet_parse.ntoa() |> to_string()
-
-    if resident.session_id != nil do
-      ResidentsAuth.mark_old_session_as_replaced(resident.session_id)
-    end
-
-    session_id = Ecto.UUID.generate()
-
-    {:ok, _session} =
-      ResidentsAuth.create_session(%{
-        "session_id" => session_id,
-        "resident_id" => resident.id,
-        "email" => resident.email,
-        "status" => ResidentsAuth.verified(),
-        "ip_address" => ip_addr,
-        "last_activity_time" => NaiveDateTime.utc_now()
-      })
-
-    {:ok, _} = Residents.update_session_id(resident, session_id)
-
+    session_id = ensure_verified_session(resident, conn)
     token = BldgServer.Token.generate_auth_token(resident.id, session_id)
     json(conn, %{token: token, resident_id: resident.id})
+  end
+
+  # Reuse the resident's existing VERIFIED session if they have one (so repeated
+  # mints — e.g. dashboard + Unity both validating — don't churn/invalidate each
+  # other's tokens); otherwise create a fresh verified session.
+  defp ensure_verified_session(resident, conn) do
+    verified = ResidentsAuth.verified()
+
+    existing =
+      resident.session_id && ResidentsAuth.get_session_by_session_id(resident.session_id)
+
+    case existing do
+      %Session{status: ^verified, session_id: sid} ->
+        sid
+
+      _ ->
+        ip_addr = conn.remote_ip |> :inet_parse.ntoa() |> to_string()
+        session_id = Ecto.UUID.generate()
+
+        {:ok, _session} =
+          ResidentsAuth.create_session(%{
+            "session_id" => session_id,
+            "resident_id" => resident.id,
+            "email" => resident.email,
+            "status" => verified,
+            "ip_address" => ip_addr,
+            "last_activity_time" => NaiveDateTime.utc_now()
+          })
+
+        {:ok, _} = Residents.update_session_id(resident, session_id)
+        session_id
+    end
   end
 
   def create(conn, %{"resident" => resident_params}) do
