@@ -33,7 +33,7 @@ defmodule BldgServerWeb.BatteryAuth do
   @doc "Plug: require an authenticated battery. Halts 401 only when enforcing."
   def require_authenticated_battery(conn, _opts) do
     cond do
-      conn.assigns[:current_battery] ->
+      conn.assigns[:current_battery] || ResidentAuth.service?(conn) ->
         conn
 
       ResidentAuth.enforce_auth?() ->

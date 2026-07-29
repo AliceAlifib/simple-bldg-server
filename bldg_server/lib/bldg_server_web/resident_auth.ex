@@ -27,6 +27,46 @@ defmodule BldgServerWeb.ResidentAuth do
 
   def enforce_auth?, do: Application.get_env(:bldg_server, :enforce_auth, false)
 
+  # --- Trusted service (alice-in-goals provisioner) -------------------------
+  # A first-party backend that presents the shared BLDG_SERVER_API_KEY as a
+  # bearer token. It provisions residents/bldgs and mints resident tokens, so it
+  # is treated as a privileged caller that bypasses per-resident ownership.
+
+  def service_api_key, do: Application.get_env(:bldg_server, :service_api_key)
+
+  @doc "True when the request carries the configured service API key."
+  def service?(conn), do: conn.assigns[:current_service] == true
+
+  @doc "Plug: assign `:current_service` when the bearer token equals the service API key."
+  def fetch_current_service(conn, _opts) do
+    key = service_api_key()
+
+    is_service =
+      is_binary(key) and key != "" and
+        case bearer_token(conn) do
+          {:ok, token} -> Plug.Crypto.secure_compare(token, key)
+          :error -> false
+        end
+
+    assign(conn, :current_service, is_service)
+  end
+
+  @doc """
+  Plug: require the trusted service API key. Unlike the resident/battery plugs
+  this is ALWAYS enforced (never relaxed in dual-run) — it guards privileged
+  operations like minting resident tokens, which must never be open.
+  """
+  def require_authenticated_service(conn, _opts) do
+    if service?(conn) do
+      conn
+    else
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "service authentication required"})
+      |> halt()
+    end
+  end
+
   @doc """
   Resolves a resident from a bearer token (or nil). Shared by the plug and the
   WebSocket `connect/3`.
@@ -58,7 +98,7 @@ defmodule BldgServerWeb.ResidentAuth do
   @doc "Plug: require an authenticated resident. Halts 401 only when enforcing."
   def require_authenticated_resident(conn, _opts) do
     cond do
-      conn.assigns[:current_resident] ->
+      conn.assigns[:current_resident] || service?(conn) ->
         conn
 
       enforce_auth?() ->
@@ -116,6 +156,9 @@ defmodule BldgServerWeb.ResidentAuth do
     current = conn.assigns[:current_resident]
 
     cond do
+      service?(conn) ->
+        :ok
+
       current && to_string(current.id) == to_string(resident_id) ->
         :ok
 
@@ -135,6 +178,9 @@ defmodule BldgServerWeb.ResidentAuth do
     end
 
     cond do
+      service?(conn) ->
+        :ok
+
       email && ownership_fun.(email) ->
         :ok
 

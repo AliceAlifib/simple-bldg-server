@@ -98,6 +98,47 @@ defmodule BldgServerWeb.ResidentAuthTest do
     end
   end
 
+  describe "trusted service (BLDG_SERVER_API_KEY)" do
+    setup do
+      prev_key = Application.get_env(:bldg_server, :service_api_key)
+      Application.put_env(:bldg_server, :service_api_key, "test-service-key")
+      on_exit(fn -> Application.put_env(:bldg_server, :service_api_key, prev_key) end)
+      :ok
+    end
+
+    test "mint_token requires the service key (401 without it, even in dual-run)", %{conn: conn} do
+      Application.put_env(:bldg_server, :enforce_auth, false)
+      r = make_resident("mint-noauth@example.com")
+      conn = post(conn, "/v1/residents/#{r.id}/token", %{})
+      assert json_response(conn, 401)["error"] =~ "service authentication required"
+    end
+
+    test "mint_token with the service key returns a token that validates", %{conn: conn} do
+      r = make_resident("mint-ok@example.com")
+
+      conn =
+        conn
+        |> auth("test-service-key")
+        |> post("/v1/residents/#{r.id}/token", %{})
+
+      token = json_response(conn, 200)["token"]
+      assert is_binary(token)
+      assert ResidentAuth.resident_from_token(token).id == r.id
+    end
+
+    test "service key authorizes a protected mutation under enforcement", %{conn: conn} do
+      Application.put_env(:bldg_server, :enforce_auth, true)
+      # Without any credential this create would 401; with the service key it
+      # passes the auth gate and reaches the controller.
+      conn =
+        conn
+        |> auth("test-service-key")
+        |> post("/v1/residents", %{"resident" => %{"email" => "svc@example.com"}})
+
+      refute conn.status == 401
+    end
+  end
+
   describe "impersonation fix: act binds identity to the token, not the body" do
     test "with a token for A, act(resident_email: B) acts as A", %{conn: conn} do
       a = make_resident("a-actor@example.com")

@@ -73,6 +73,14 @@ end
 config :bldg_server,
   battery_provision_token: System.get_env("BATTERY_PROVISION_TOKEN")
 
+# Shared secret for a trusted first-party service (alice-in-goals) that
+# provisions residents/bldgs and mints resident bearer tokens for the embedded
+# web client. Presented as `Authorization: Bearer <key>`; grants privileged
+# access that bypasses per-resident ownership. Must match BLDG_SERVER_API_KEY on
+# the alice-in-goals side.
+config :bldg_server,
+  service_api_key: System.get_env("BLDG_SERVER_API_KEY")
+
 if config_env() == :test do
   # application.ex reads these via System.fetch_env! at boot. Provide localhost
   # defaults so `mix test` works out of the box against a standard password-less

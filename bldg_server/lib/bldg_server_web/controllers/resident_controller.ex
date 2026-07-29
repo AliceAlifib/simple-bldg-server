@@ -93,6 +93,38 @@ defmodule BldgServerWeb.ResidentController do
     end
   end
 
+  @doc """
+  Mints a bearer token for a resident on behalf of the trusted service
+  (alice-in-goals), which has already authenticated the user on its side. Creates
+  a fresh VERIFIED session (replacing any prior one) so the token passes the
+  session-backed revocation check. Service-authenticated only (see router).
+  """
+  def mint_token(conn, %{"id" => id}) do
+    resident = Residents.get_resident!(id)
+    ip_addr = conn.remote_ip |> :inet_parse.ntoa() |> to_string()
+
+    if resident.session_id != nil do
+      ResidentsAuth.mark_old_session_as_replaced(resident.session_id)
+    end
+
+    session_id = Ecto.UUID.generate()
+
+    {:ok, _session} =
+      ResidentsAuth.create_session(%{
+        "session_id" => session_id,
+        "resident_id" => resident.id,
+        "email" => resident.email,
+        "status" => ResidentsAuth.verified(),
+        "ip_address" => ip_addr,
+        "last_activity_time" => NaiveDateTime.utc_now()
+      })
+
+    {:ok, _} = Residents.update_session_id(resident, session_id)
+
+    token = BldgServer.Token.generate_auth_token(resident.id, session_id)
+    json(conn, %{token: token, resident_id: resident.id})
+  end
+
   def create(conn, %{"resident" => resident_params}) do
     # session_id is assigned by the auth flow, never accepted from the client.
     safe_params = Map.drop(resident_params, ["session_id"])

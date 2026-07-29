@@ -2,7 +2,12 @@ defmodule BldgServerWeb.Router do
   use BldgServerWeb, :router
 
   import BldgServerWeb.ResidentAuth,
-    only: [fetch_current_resident: 2, require_authenticated_resident: 2]
+    only: [
+      fetch_current_resident: 2,
+      require_authenticated_resident: 2,
+      fetch_current_service: 2,
+      require_authenticated_service: 2
+    ]
 
   import BldgServerWeb.BatteryAuth,
     only: [
@@ -11,10 +16,17 @@ defmodule BldgServerWeb.Router do
       require_battery_provisioning: 2
     ]
 
-  # Base: parse JSON and (always) resolve the bearer token into :current_resident.
+  # Base: parse JSON and resolve the bearer token into :current_resident (or the
+  # trusted service into :current_service).
   pipeline :api do
     plug(:accepts, ["json"])
     plug(:fetch_current_resident)
+    plug(:fetch_current_service)
+  end
+
+  # Trusted first-party service (alice-in-goals). Always enforced.
+  pipeline :require_service do
+    plug(:require_authenticated_service)
   end
 
   # Resident-authenticated routes (reads and mutations). In dual-run the require
@@ -65,6 +77,15 @@ defmodule BldgServerWeb.Router do
     resources("/bldgs", BldgController, except: [:new, :edit], param: "address")
     resources("/residents", ResidentController, except: [:new, :edit])
     resources("/roads", RoadController, except: [:new, :edit])
+  end
+
+  # --- Trusted service (alice-in-goals) -------------------------------------
+  scope "/v1", BldgServerWeb do
+    pipe_through([:api, :require_service])
+
+    # Mint a resident bearer token for the embedded web client. The service
+    # vouches that the resident is authenticated on its side (Google OAuth).
+    post("/residents/:id/token", ResidentController, :mint_token)
   end
 
   # --- Battery credential provisioning --------------------------------------
