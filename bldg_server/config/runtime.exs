@@ -47,13 +47,15 @@ config :bldg_server,
   auth_token_salt: fetch_secret.("AUTH_TOKEN_SALT", "dev_only_auth_token_salt")
 
 # CORS allow-list (read by BldgServerWeb.Endpoint.cors_origins/0). CORS only
-# constrains browsers; the Unity client and batteries send no Origin header and
-# are unaffected. Prod defaults to deny-all so a web origin must be added
-# explicitly via CORS_ORIGINS (comma-separated); dev reflects any origin.
+# constrains browsers; the native Unity client and batteries send no Origin
+# header and are unaffected. Opt-in lockdown (like ENFORCE_AUTH): unset/blank =
+# allow any origin (`*`) so browser + WebGL clients keep working out of the box;
+# set CORS_ORIGINS (comma-separated) to restrict to specific web origins.
+# NB both Fly stacks run MIX_ENV=prod, so a deny-by-default here would block
+# every browser client on the "dev" app too.
 cors_origins =
   case System.get_env("CORS_ORIGINS") do
-    nil -> if config_env() == :prod, do: [], else: ["*"]
-    "" -> []
+    blank when blank in [nil, ""] -> "*"
     value -> value |> String.split(",") |> Enum.map(&String.trim/1)
   end
 

@@ -17,8 +17,8 @@
 #                                 for the dual-run rollout (auth inert). Flip to
 #                                 "true" only after clients send tokens.
 #   BATTERY_PROVISION_TOKEN       gate for provisioning battery API keys
-#   CORS_ORIGINS                  comma-separated browser origins (prod denies
-#                                 cross-origin by default)
+#   CORS_ORIGINS                  comma-separated browser origins to allow.
+#                                 UNSET = allow any origin (*); set to lock down.
 #   BATTERY_URL_ALLOWED_HOSTS     SSRF allow-list for battery callback hosts
 #   SENTRY_DSN                    error reporting
 #

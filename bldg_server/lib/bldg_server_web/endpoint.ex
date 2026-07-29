@@ -8,10 +8,10 @@ defmodule BldgServerWeb.Endpoint do
   # no signing salt to keep in source.
 
   # CORS allow-list. Sourced from the CORS_ORIGINS env var (comma-separated) via
-  # config/runtime.exs; prod defaults to deny-all (empty list) so a browser
-  # origin must be added explicitly, dev reflects any origin. Evaluated per
-  # request so the runtime config is honored.
-  def cors_origins, do: Application.get_env(:bldg_server, :cors_origins, [])
+  # config/runtime.exs; defaults to `*` (allow any origin) when unset so browser
+  # clients keep working, and locks down to specific origins when set. Evaluated
+  # per request so the runtime config is honored.
+  def cors_origins, do: Application.get_env(:bldg_server, :cors_origins, "*")
 
   socket "/socket", BldgServerWeb.UserSocket,
     websocket: true,
