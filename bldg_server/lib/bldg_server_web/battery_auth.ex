@@ -19,16 +19,29 @@ defmodule BldgServerWeb.BatteryAuth do
   alias BldgServer.Batteries
   alias BldgServerWeb.ResidentAuth
 
-  @doc "Plug: assign `:current_battery` from the Authorization bearer service key (nil if absent/invalid)."
+  @doc """
+  Plug: assign `:current_battery` from the Authorization bearer service key (nil
+  if absent/invalid). Runs in the base :api pipeline so battery keys work on the
+  bldg read/update routes too — but short-circuits (skips the DB lookup) when a
+  resident or the service is already resolved, so ordinary resident requests
+  don't pay for it.
+  """
   def fetch_current_battery(conn, _opts) do
     battery =
-      case bearer_token(conn) do
-        {:ok, key} -> Batteries.authenticate_battery_key(key)
-        :error -> nil
+      if conn.assigns[:current_resident] || conn.assigns[:current_service] do
+        nil
+      else
+        case bearer_token(conn) do
+          {:ok, key} -> Batteries.authenticate_battery_key(key)
+          :error -> nil
+        end
       end
 
     assign(conn, :current_battery, battery)
   end
+
+  @doc "True when the given raw token string matches a battery credential (for socket auth)."
+  def battery_key?(token), do: Batteries.authenticate_battery_key(token) != nil
 
   @doc "Plug: require an authenticated battery. Halts 401 only when enforcing."
   def require_authenticated_battery(conn, _opts) do

@@ -34,8 +34,25 @@ defmodule BldgServerWeb.ResidentAuth do
 
   def service_api_key, do: Application.get_env(:bldg_server, :service_api_key)
 
+  @doc "True when the given raw token string equals the configured service API key (for socket auth)."
+  def service_token?(token) when is_binary(token) do
+    key = service_api_key()
+    is_binary(key) and key != "" and Plug.Crypto.secure_compare(token, key)
+  end
+
+  def service_token?(_), do: false
+
   @doc "True when the request carries the configured service API key."
   def service?(conn), do: conn.assigns[:current_service] == true
+
+  @doc """
+  True for a privileged machine principal (the trusted service OR an
+  authenticated battery). These bypass per-resident ownership: the service is
+  the provisioner, and batteries are trusted bldg mutators. NOTE: battery keys
+  are currently unscoped (any battery can touch any bldg) — see the
+  scope-battery-authorization enhancement.
+  """
+  def machine?(conn), do: service?(conn) or conn.assigns[:current_battery] != nil
 
   @doc "Plug: assign `:current_service` when the bearer token equals the service API key."
   def fetch_current_service(conn, _opts) do
@@ -98,7 +115,7 @@ defmodule BldgServerWeb.ResidentAuth do
   @doc "Plug: require an authenticated resident. Halts 401 only when enforcing."
   def require_authenticated_resident(conn, _opts) do
     cond do
-      conn.assigns[:current_resident] || service?(conn) ->
+      conn.assigns[:current_resident] || machine?(conn) ->
         conn
 
       enforce_auth?() ->
@@ -178,7 +195,7 @@ defmodule BldgServerWeb.ResidentAuth do
     end
 
     cond do
-      service?(conn) ->
+      machine?(conn) ->
         :ok
 
       email && ownership_fun.(email) ->

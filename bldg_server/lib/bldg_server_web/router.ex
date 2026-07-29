@@ -16,12 +16,16 @@ defmodule BldgServerWeb.Router do
       require_battery_provisioning: 2
     ]
 
-  # Base: parse JSON and resolve the bearer token into :current_resident (or the
-  # trusted service into :current_service).
+  # Base: parse JSON and resolve the bearer token into the calling principal —
+  # a resident (:current_resident), the trusted service (:current_service), or a
+  # battery (:current_battery). Battery resolution is last and short-circuits
+  # when a resident/service already matched, so batteries can use the bldg
+  # read/update routes without adding cost to ordinary resident requests.
   pipeline :api do
     plug(:accepts, ["json"])
     plug(:fetch_current_resident)
     plug(:fetch_current_service)
+    plug(:fetch_current_battery)
   end
 
   # Trusted first-party service (alice-in-goals). Always enforced.
@@ -35,9 +39,9 @@ defmodule BldgServerWeb.Router do
     plug(:require_authenticated_resident)
   end
 
-  # Battery (machine) routes: resolve + require a service key.
+  # Battery (machine) routes: require an authenticated battery (or service).
+  # :current_battery is already resolved by the :api pipeline.
   pipeline :battery do
-    plug(:fetch_current_battery)
     plug(:require_authenticated_battery)
   end
 

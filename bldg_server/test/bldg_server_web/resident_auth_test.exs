@@ -139,6 +139,27 @@ defmodule BldgServerWeb.ResidentAuthTest do
     end
   end
 
+  describe "battery key on bldg read/update routes (widened auth)" do
+    setup do
+      Application.put_env(:bldg_server, :enforce_auth, true)
+      {:ok, key, _cred} = BldgServer.Batteries.provision_battery_credential("fsb", "b@example.com")
+      {:ok, battery_key: key}
+    end
+
+    test "a battery key authorizes a resident-auth read under enforcement", %{conn: conn, battery_key: key} do
+      # by_bldg_url is a resident-auth read; a missing bldg is 404, so a non-401
+      # proves the battery key passed the auth gate.
+      conn = conn |> auth(key) |> get("/v1/bldgs/by_bldg_url?bldg_url=g/nope")
+      assert conn.status == 404
+    end
+
+    test "a battery key authorizes a bldg mutation under enforcement", %{conn: conn, battery_key: key} do
+      conn = conn |> auth(key) |> post("/v1/bldgs", %{"bldg" => %{"name" => "x", "flr" => "g"}})
+      refute conn.status == 401
+      refute conn.status == 403
+    end
+  end
+
   describe "impersonation fix: act binds identity to the token, not the body" do
     test "with a token for A, act(resident_email: B) acts as A", %{conn: conn} do
       a = make_resident("a-actor@example.com")

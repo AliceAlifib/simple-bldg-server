@@ -119,6 +119,14 @@ defmodule BldgServerWeb.FloorChannelTest do
       assert {:ok, socket} = connect(BldgServerWeb.UserSocket, %{})
       assert socket.assigns.current_resident == nil
     end
+
+    test "enforcing: connect with a battery key is accepted as a machine principal" do
+      Application.put_env(:bldg_server, :enforce_auth, true)
+      {:ok, key, _cred} = BldgServer.Batteries.provision_battery_credential("fsb", "b@example.com")
+      assert {:ok, socket} = connect(BldgServerWeb.UserSocket, %{"token" => key})
+      assert socket.assigns.machine_authed == true
+      assert socket.assigns.current_resident == nil
+    end
   end
 
   describe "request_scan end-to-end" do

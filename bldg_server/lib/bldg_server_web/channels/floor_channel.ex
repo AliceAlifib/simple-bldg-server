@@ -8,9 +8,11 @@ defmodule BldgServerWeb.FloorChannel do
   require Logger
 
   def join("floor:" <> flr, _params, socket) do
-    # Require an authenticated resident to join (any resident may join a public
-    # floor). Dual-run: when :enforce_auth is off, anonymous joins are allowed.
-    if socket.assigns[:current_resident] || not BldgServerWeb.ResidentAuth.enforce_auth?() do
+    # Require an authenticated principal to join (any resident, or a machine
+    # principal like a battery). Dual-run: when :enforce_auth is off, anonymous
+    # joins are allowed.
+    if socket.assigns[:current_resident] || socket.assigns[:machine_authed] ||
+         not BldgServerWeb.ResidentAuth.enforce_auth?() do
       Logger.info("[FloorChannel] Client joined floor:#{flr}")
       {:ok, assign(socket, :flr, flr)}
     else
