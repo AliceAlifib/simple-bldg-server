@@ -9,3 +9,13 @@ erl_crash.dump
 /config/*.secret.exs
 .elixir_ls/
 *.crt
+
+# Secret-bearing / local-only files — must never be committed.
+.env
+*.env.bak*
+*.bak*
+docker*.env
+fly*.toml.bak*
+*.patch
+.DS_Store
+.sprite/

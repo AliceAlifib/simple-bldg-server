@@ -19,4 +19,16 @@ defmodule BldgServerWeb.FallbackController do
     |> put_view(BldgServerWeb.ErrorView)
     |> render(:"404")
   end
+
+  def call(conn, {:error, :unauthorized}) do
+    conn
+    |> put_status(:unauthorized)
+    |> json(%{error: "authentication required"})
+  end
+
+  def call(conn, {:error, :forbidden}) do
+    conn
+    |> put_status(:forbidden)
+    |> json(%{error: "not authorized"})
+  end
 end

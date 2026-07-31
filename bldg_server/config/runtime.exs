@@ -11,7 +11,75 @@ config :sentry,
   environment_name: to_string(config_env()),
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
+  # Redact credentials/PII from every event before it is sent (see scrubber).
+  before_send: {BldgServer.SentryScrubber, :before_send},
   tags: %{service: "bldg-server", fly_app: System.get_env("FLY_APP_NAME")}
+
+# --- Signing secrets (all environments) -------------------------------------
+# The real secret is SECRET_KEY_BASE; Phoenix derives every per-purpose signing
+# key from it plus a salt (so the token salts are namespaces, not secrets). In
+# prod a missing/blank value fails loud; dev and test fall back to clearly
+# non-secret local defaults so the app boots with zero configuration.
+fetch_secret = fn var, dev_default ->
+  case System.get_env(var) do
+    value when value in [nil, ""] ->
+      if config_env() == :prod,
+        do: raise("environment variable #{var} is missing or empty"),
+        else: dev_default
+
+    value ->
+      value
+  end
+end
+
+config :bldg_server, BldgServerWeb.Endpoint,
+  secret_key_base:
+    fetch_secret.(
+      "SECRET_KEY_BASE",
+      "dev_only_insecure_secret_key_base_override_in_prod_padding_0123456789"
+    )
+
+# Phoenix.Token salts for the magic-link verification token and (Tranche 2) the
+# resident bearer token. Distinct salts keep the two token classes unforgeable
+# across purposes.
+config :bldg_server,
+  magic_link_salt: fetch_secret.("MAGIC_LINK_SALT", "dev_only_magic_link_salt"),
+  auth_token_salt: fetch_secret.("AUTH_TOKEN_SALT", "dev_only_auth_token_salt")
+
+# CORS allow-list (read by BldgServerWeb.Endpoint.cors_origins/0). CORS only
+# constrains browsers; the native Unity client and batteries send no Origin
+# header and are unaffected. Opt-in lockdown (like ENFORCE_AUTH): unset/blank =
+# allow any origin (`*`) so browser + WebGL clients keep working out of the box;
+# set CORS_ORIGINS (comma-separated) to restrict to specific web origins.
+# NB both Fly stacks run MIX_ENV=prod, so a deny-by-default here would block
+# every browser client on the "dev" app too.
+cors_origins =
+  case System.get_env("CORS_ORIGINS") do
+    blank when blank in [nil, ""] -> "*"
+    value -> value |> String.split(",") |> Enum.map(&String.trim/1)
+  end
+
+config :bldg_server, :cors_origins, cors_origins
+
+# Auth enforcement toggle for the dual-run rollout. Read from ENFORCE_AUTH so it
+# can be flipped in prod without a code deploy. Defaults to the compile-time
+# value (false) when the var is unset.
+if System.get_env("ENFORCE_AUTH") do
+  config :bldg_server, :enforce_auth, System.get_env("ENFORCE_AUTH") == "true"
+end
+
+# Out-of-band secret that gates battery credential provisioning (the bootstrap
+# for a machine caller that can't do the email magic-link). Optional in dev/test.
+config :bldg_server,
+  battery_provision_token: System.get_env("BATTERY_PROVISION_TOKEN")
+
+# Shared secret for a trusted first-party service (alice-in-goals) that
+# provisions residents/bldgs and mints resident bearer tokens for the embedded
+# web client. Presented as `Authorization: Bearer <key>`; grants privileged
+# access that bypasses per-resident ownership. Must match BLDG_SERVER_API_KEY on
+# the alice-in-goals side.
+config :bldg_server,
+  service_api_key: System.get_env("BLDG_SERVER_API_KEY")
 
 if config_env() == :test do
   # application.ex reads these via System.fetch_env! at boot. Provide localhost
@@ -23,7 +91,6 @@ if config_env() == :test do
 end
 
 if config_env() == :prod do
-  secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
   app_port = System.fetch_env!("APP_PORT")
   app_hostname = System.fetch_env!("APP_HOSTNAME")
   db_user = System.fetch_env!("DB_USER")
@@ -38,9 +105,13 @@ if config_env() == :prod do
 
   config :bldg_server, :dgraph_url, dgraph_url
 
+  # TLS is terminated at the Fly edge (force_https in fly.*.toml); the app speaks
+  # HTTP internally but receives the original scheme via x-forwarded-proto.
+  # force_ssl redirects any plain-HTTP request and, with hsts: true, emits a
+  # Strict-Transport-Security header so browsers refuse future HTTP.
   config :bldg_server, BldgServerWeb.Endpoint,
     http: [:inet6, port: String.to_integer(app_port)],
-    secret_key_base: secret_key_base
+    force_ssl: [rewrite_on: [:x_forwarded_proto], hsts: true]
 
   config :bldg_server,
     app_port: app_port

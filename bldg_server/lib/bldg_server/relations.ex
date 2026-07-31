@@ -39,8 +39,9 @@ defmodule BldgServer.Relations do
   def list_all_roads_in_flr(flr) do
     # Delimiter-safe: exact floor or a strict sub-path, so ".../l1" doesn't also
     # match ".../l10". See Buildings.list_all_bldgs_in_flr/2.
+    flr_subtree = Utils.escape_like_pattern(flr) <> "/%"
     q = from r in Road,
-        where: r.flr == ^flr or like(r.flr, ^"#{flr}/%")
+        where: r.flr == ^flr or like(r.flr, ^flr_subtree)
     Repo.all(q)
   end
 

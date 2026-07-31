@@ -22,5 +22,8 @@ config :bldg_server, BldgServer.Mailer, adapter: Bamboo.TestAdapter
 # Bypass port via Application.put_env at runtime.
 config :bldg_server, :dgraph_url, "http://localhost:8080"
 
+# Bypass mock servers bind to loopback, so allow private callback_urls in tests.
+config :bldg_server, :block_private_callback_urls, false
+
 # Print only warnings and errors during test
 config :logger, level: :warn

@@ -6,6 +6,12 @@ defmodule BldgServerWeb.ResidentView do
     %{data: render_many(residents, ResidentView, "resident.json")}
   end
 
+  def render("show.json", %{resident: resident, token: token}) do
+    # The bearer token is returned only on the authenticated login/verification
+    # responses — never in floor broadcasts or list renders.
+    %{data: render_one(resident, ResidentView, "resident.json"), token: token}
+  end
+
   def render("show.json", %{resident: resident}) do
     %{data: render_one(resident, ResidentView, "resident.json")}
   end

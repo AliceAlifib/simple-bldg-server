@@ -22,23 +22,28 @@ defmodule BldgServerWeb.BatteryChatDispatcher do
   end
 
   def send_message_to_battery(callback_url, msg) do
-    {_, msg_json} = Jason.encode(msg)
-    IO.puts("~~~~~ About to invoke battery callback URL at: #{callback_url}")
-    IO.inspect(msg_json)
-    header_key = "content-type"
-    header_val = "application/json"
+    # SSRF guard at the sink: re-validate the URL immediately before the request,
+    # covering both dispatch paths (Redis-registered pool and attached batteries)
+    # and closing the DNS-rebind window left by validation at registration time.
+    case BldgServer.SafeUrl.validate(callback_url) do
+      :ok ->
+        {_, msg_json} = Jason.encode(msg)
+        Logger.debug("Invoking battery callback URL")
 
-    Finch.build(:post, callback_url, [{header_key, header_val}], msg_json)
-    |> Finch.request(FinchClient)
-    |> IO.inspect()
+        Finch.build(:post, callback_url, [{"content-type", "application/json"}], msg_json)
+        |> Finch.request(FinchClient)
+
+      {:error, reason} ->
+        Logger.error("Refusing to call unsafe battery callback_url: #{reason}")
+        {:error, reason}
+    end
   end
 
   # def handle_info({sender, message, flr}, state) do
   def handle_info(%{event: "new_message", payload: new_message}, state) do
-    # Logger.info("chat message received at #{flr} from #{sender}: #{message}")
     flr_url = new_message["say_flr_url"]
-    IO.puts("~~~~~~~~~~~ [battery chat dispatcher] chat message received at #{flr_url}:")
-    IO.inspect(new_message)
+    # Log only the floor, not the message (it carries resident_email + say_text).
+    Logger.debug("[battery chat dispatcher] chat message received at #{flr_url}")
 
     # find battery bldgs on this floor
     battery_bldgs = Buildings.get_batteries_in_floor(flr_url)

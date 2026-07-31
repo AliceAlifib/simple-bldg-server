@@ -1,9 +1,27 @@
 # Production Fly.io config for bldg-server-prod (in the alice-in org).
 # Deploy with: fly deploy -c bldg_server/fly.prod.toml
 #
-# Secrets (DB_PASSWORD, DB_USER, REDIS_PASSWORD, REDIS_PWD, SENDGRID_API_KEY,
-# SECRET_KEY_BASE) must be set via `fly secrets set -a bldg-server-prod ...` —
-# NEVER commit them here.
+# Secrets must be set via `fly secrets set -a bldg-server-prod ...` (per app —
+# they do NOT carry over from dev) — NEVER commit them here.
+#
+# REQUIRED (the app fails loud at boot if any signing secret is missing — see
+# config/runtime.exs):
+#   DB_USER, DB_PASSWORD          database credentials
+#   REDIS_PWD                     Upstash password
+#   SENDGRID_API_KEY              magic-link email delivery
+#   SECRET_KEY_BASE               Phoenix signing base  (openssl rand -base64 64)
+#   MAGIC_LINK_SALT               magic-link token salt (openssl rand -hex 32)
+#   AUTH_TOKEN_SALT               bearer-token salt     (openssl rand -hex 32)
+#
+# OPTIONAL (safe defaults when unset):
+#   ENFORCE_AUTH                  "true" turns auth enforcement ON. LEAVE UNSET
+#                                 for the dual-run rollout; flip only after
+#                                 clients send tokens.
+#   BATTERY_PROVISION_TOKEN       gate for provisioning battery API keys
+#   CORS_ORIGINS                  comma-separated browser origins to allow.
+#                                 UNSET = allow any origin (*); set to lock down.
+#   BATTERY_URL_ALLOWED_HOSTS     SSRF allow-list for battery callback hosts
+#   SENTRY_DSN                    error reporting
 #
 # The Fly app name is bldg-server-prod because `bldg-server` is already taken
 # globally by the dev app in the personal org. End-users reach prod via the

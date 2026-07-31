@@ -3,17 +3,27 @@
 #
 # Deploy with: fly deploy -c bldg_server/fly.dev.toml
 #
-# PREREQUISITE before first deploy with this file: migrate the secrets that
-# are currently in plaintext in bldg_server/fly.toml [env] over to Fly's
-# secrets store, e.g.:
-#   fly secrets set -a bldg-server \
-#     DB_PASSWORD=... DB_USER=... \
-#     REDIS_PASSWORD=... REDIS_PWD=... \
-#     SENDGRID_API_KEY=... SECRET_KEY_BASE=...
-# Otherwise the app will start with missing env vars and fail at runtime.
+# REQUIRED secrets (set via `fly secrets set -a bldg-server ...`; the app fails
+# loud at boot if any signing secret is missing — see config/runtime.exs):
+#   DB_USER, DB_PASSWORD          database credentials
+#   REDIS_PWD                     Upstash password
+#   SENDGRID_API_KEY              magic-link email delivery
+#   SECRET_KEY_BASE               Phoenix signing base  (openssl rand -base64 64)
+#   MAGIC_LINK_SALT               magic-link token salt (openssl rand -hex 32)
+#   AUTH_TOKEN_SALT               bearer-token salt     (openssl rand -hex 32)
 #
-# The secrets in the current fly.toml on master are considered compromised —
-# rotate SendGrid, Upstash, and the DB password when you migrate them.
+# OPTIONAL secrets/vars (safe defaults when unset):
+#   ENFORCE_AUTH                  "true" turns auth enforcement ON. LEAVE UNSET
+#                                 for the dual-run rollout (auth inert). Flip to
+#                                 "true" only after clients send tokens.
+#   BATTERY_PROVISION_TOKEN       gate for provisioning battery API keys
+#   CORS_ORIGINS                  comma-separated browser origins to allow.
+#                                 UNSET = allow any origin (*); set to lock down.
+#   BATTERY_URL_ALLOWED_HOSTS     SSRF allow-list for battery callback hosts
+#   SENTRY_DSN                    error reporting
+#
+# The secrets in the original fly.toml on master are considered compromised —
+# rotate SendGrid, Upstash, the DB password, and SECRET_KEY_BASE.
 
 app = 'bldg-server'
 primary_region = 'sjc'

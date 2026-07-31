@@ -14,13 +14,13 @@ defmodule BldgServer.Application do
       config: %{metadata: [:file, :line]}
     })
 
-    # Log Redis configuration for debugging
     redis_host = System.fetch_env!("REDIS_HOST")
     redis_password = System.fetch_env!("REDIS_PWD")
     redis_port = System.fetch_env!("REDIS_PORT") || "6379"
 
+    # Never log the Redis password. Log only non-secret connection facts.
     Logger.info(
-      "Redis configuration - Host: #{redis_host}, Port: #{redis_port}, Pwd: #{redis_password}"
+      "Redis configuration - Host: #{redis_host}, Port: #{redis_port}, Auth: #{redis_password not in [nil, ""]}"
     )
 
     # List all child processes to be supervised

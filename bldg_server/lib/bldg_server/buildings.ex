@@ -89,10 +89,12 @@ defmodule BldgServer.Buildings do
     # Delimiter-safe: match the floor exactly (direct children) or a strict
     # sub-path ("flr/..."). A bare "flr%" prefix would also match a numerically-
     # prefixed sibling floor (e.g. ".../l1" wrongly matching ".../l10").
+    flr_subtree = Utils.escape_like_pattern(flr) <> "/%"
+
     q =
       from(b in Bldg,
         where:
-          b.flr == ^flr or like(b.flr, ^"#{flr}/%") or
+          b.flr == ^flr or like(b.flr, ^flr_subtree) or
             (^include_parent and b.address == ^parent_addr)
       )
 

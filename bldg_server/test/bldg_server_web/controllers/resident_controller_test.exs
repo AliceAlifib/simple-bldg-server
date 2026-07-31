@@ -72,7 +72,9 @@ defmodule BldgServerWeb.ResidentControllerTest do
                "name" => "some name",
                "other_attributes" => %{},
                "previous_messages" => [],
-               "session_id" => "7488a646-e31f-11e4-aace-600308960662"
+               # session_id is server-controlled: a client-supplied value is
+               # dropped on create (mass-assignment protection).
+               "session_id" => nil
              } = json_response(conn, 200)["data"]
     end
 
@@ -95,7 +97,9 @@ defmodule BldgServerWeb.ResidentControllerTest do
                "id" => ^id,
                "alias" => "some updated alias",
                "direction" => 43,
-               "email" => "some updated email",
+               # email is identity, bound by the auth flow — not mutable via
+               # update (dropped from params), so it stays the fixture value.
+               "email" => "some email",
                "home_bldg" => "some updated home_bldg",
                "is_online" => true,
                "last_login_at" => "2011-05-18T15:01:01",
@@ -104,7 +108,9 @@ defmodule BldgServerWeb.ResidentControllerTest do
                "name" => "some updated name",
                "other_attributes" => %{},
                "previous_messages" => [],
-               "session_id" => "7488a646-e31f-11e4-aace-600308960668"
+               # update cannot change session_id (dropped from params); it stays
+               # the value the fixture created the resident with.
+               "session_id" => "7488a646-e31f-11e4-aace-600308960662"
              } = json_response(conn, 200)["data"]
     end
 

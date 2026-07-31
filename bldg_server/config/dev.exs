@@ -34,6 +34,9 @@ config :bldg_server,
 config :bldg_server,
   app_hostname: "localhost"
 
+# Allow loopback/private battery callback_urls locally (batteries run on localhost).
+config :bldg_server, :block_private_callback_urls, false
+
 
 # ## SSL Support
 #

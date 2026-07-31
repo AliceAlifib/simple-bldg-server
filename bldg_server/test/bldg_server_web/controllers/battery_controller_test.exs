@@ -78,5 +78,50 @@ defmodule BldgServerWeb.BatteryControllerTest do
       assert {:ok, after_cbs} = Batteries.get_registered_callbacks(type)
       refute cb in after_cbs
     end
+
+    test "register provisions an api_key when an owner_email is supplied", %{conn: conn} do
+      type = "prov-type-#{System.unique_integer([:positive])}"
+
+      conn =
+        post(conn, "/v1/batteries/register",
+          battery: %{
+            "battery_type" => type,
+            "callback_url" => "http://localhost:9999/prov-cb",
+            "owner_email" => "owner@example.com"
+          }
+        )
+
+      body = json_response(conn, 200)
+      assert body["status"] == "registered"
+      assert is_binary(body["api_key"])
+      # the returned key authenticates back to a stored credential
+      assert Batteries.authenticate_battery_key(body["api_key"]).battery_type == type
+    end
+  end
+
+  describe "battery auth enforcement (enforce_auth = true)" do
+    setup do
+      prev = Application.get_env(:bldg_server, :enforce_auth)
+      Application.put_env(:bldg_server, :enforce_auth, true)
+      on_exit(fn -> Application.put_env(:bldg_server, :enforce_auth, prev) end)
+      :ok
+    end
+
+    test "a battery route without a service key is rejected 401", %{conn: conn} do
+      conn = post(conn, "/v1/batteries/attach", battery: @attach_attrs)
+      assert json_response(conn, 401)["error"] =~ "battery authentication required"
+    end
+
+    test "a valid service key passes the battery auth gate", %{conn: conn} do
+      {:ok, key, _cred} = Batteries.provision_battery_credential("file-system-battery", "o@example.com")
+
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer " <> key)
+        |> post("/v1/batteries/attach", battery: @attach_attrs)
+
+      # authenticated → reaches the action (created), not a 401
+      assert conn.status != 401
+    end
   end
 end

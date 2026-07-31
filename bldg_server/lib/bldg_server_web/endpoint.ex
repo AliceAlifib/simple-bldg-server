@@ -2,14 +2,16 @@ defmodule BldgServerWeb.Endpoint do
   use Sentry.PlugCapture
   use Phoenix.Endpoint, otp_app: :bldg_server
 
-  # The session will be stored in the cookie and signed,
-  # this means its contents can be read but not tampered with.
-  # Set :encryption_salt if you would also like to encrypt it.
-  @session_options [
-    store: :cookie,
-    key: "_bldg_server_key",
-    signing_salt: "Hk5RFZk/"
-  ]
+  # This is a JSON API with no cookie session and no LiveView: resident
+  # "sessions" are rows in the `sessions` table and the API credential is a
+  # bearer token (see BldgServer.Token). No Plug.Session is mounted, so there is
+  # no signing salt to keep in source.
+
+  # CORS allow-list. Sourced from the CORS_ORIGINS env var (comma-separated) via
+  # config/runtime.exs; defaults to `*` (allow any origin) when unset so browser
+  # clients keep working, and locks down to specific origins when set. Evaluated
+  # per request so the runtime config is honored.
+  def cors_origins, do: Application.get_env(:bldg_server, :cors_origins, "*")
 
   socket "/socket", BldgServerWeb.UserSocket,
     websocket: true,
@@ -41,7 +43,6 @@ defmodule BldgServerWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug Plug.Session, @session_options
-  plug CORSPlug
+  plug CORSPlug, origin: &BldgServerWeb.Endpoint.cors_origins/0
   plug BldgServerWeb.Router
 end
