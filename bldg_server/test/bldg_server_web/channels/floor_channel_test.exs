@@ -76,6 +76,24 @@ defmodule BldgServerWeb.FloorChannelTest do
       assert out.color == "blue"
       assert out.road_class == "lane"
     end
+
+    test "marker key set matches MarkerView" do
+      m = marker(%{color: "green", marker_class: "lane", xs: [0, 2], ys: [0, 2]})
+      out = FloorChannel.serialize_marker(m)
+
+      expected =
+        ~w(id flr name marker_type xs ys color marker_class owners data)a
+        |> Enum.sort()
+
+      assert Map.keys(out) |> Enum.sort() == expected
+      assert out.color == "green"
+      assert out.marker_class == "lane"
+      assert out.xs == [0, 2]
+
+      # parity with the REST view
+      view = BldgServerWeb.MarkerView.render("marker.json", %{marker: m})
+      assert Map.keys(view) |> Enum.sort() == expected
+    end
   end
 
   describe "UserSocket authentication" do
@@ -130,12 +148,14 @@ defmodule BldgServerWeb.FloorChannelTest do
   end
 
   describe "request_scan end-to-end" do
-    test "pushes scan_result with the container, nested bldgs, residents and roads" do
+    test "pushes scan_result with the container, nested bldgs, residents, roads and markers" do
       # Container floor "g/b(1,2)/l0" and its contents.
       bldg(%{bldg_url: "g/b(1,2)", address: "g/b(1,2)", name: "container"})
       child = bldg(%{bldg_url: "g/b(1,2)/l0/b(3,4)", address: "g/b(1,2)/l0/b(3,4)", flr: "g/b(1,2)/l0", name: "child"})
       resident(%{flr: "g/b(1,2)/l0", location: "g/b(1,2)/l0/b(5,6)"})
       road(%{flr: "g/b(1,2)/l0"})
+      marker(%{flr: "g/b(1,2)/l0"})
+      marker(%{flr: "g/b(1,2)/l0/b(3,4)/l0"})
 
       {:ok, _, socket} =
         BldgServerWeb.UserSocket
@@ -151,6 +171,8 @@ defmodule BldgServerWeb.FloorChannelTest do
       assert child.address in addresses
       assert length(payload.residents) == 1
       assert length(payload.roads) == 1
+      # markers on the floor AND nested floors ride along
+      assert length(payload.markers) == 2
     end
   end
 end

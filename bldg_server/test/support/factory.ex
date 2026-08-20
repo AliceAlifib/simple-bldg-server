@@ -16,6 +16,7 @@ defmodule BldgServer.Factory do
   alias BldgServer.Buildings.Bldg
   alias BldgServer.Residents.Resident
   alias BldgServer.Relations.Road
+  alias BldgServer.Relations.Marker
   alias BldgServer.Batteries.Battery
   alias BldgServer.ResidentsAuth.Session
 
@@ -122,6 +123,21 @@ defmodule BldgServer.Factory do
 
     %Road{}
     |> Road.changeset(Map.merge(defaults, atomize(overrides)))
+    |> Repo.insert!()
+  end
+
+  @doc "Build & insert a Marker (a 2-point path on `g` by default; name is unique)."
+  def marker(overrides \\ %{}) do
+    defaults = %{
+      flr: "g",
+      name: "marker-#{unique_integer()}",
+      marker_type: "path",
+      xs: [0, 1],
+      ys: [0, 1]
+    }
+
+    %Marker{}
+    |> Marker.changeset(Map.merge(defaults, atomize(overrides)))
     |> Repo.insert!()
   end
 

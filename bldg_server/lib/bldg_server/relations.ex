@@ -7,6 +7,7 @@ defmodule BldgServer.Relations do
   alias BldgServer.Repo
 
   alias BldgServer.Relations.Road
+  alias BldgServer.Relations.Marker
 
   @doc """
   Returns the list of roads.
@@ -213,4 +214,151 @@ defmodule BldgServer.Relations do
   end
 
   defp broadcast_road_change(_, _), do: :ok
+
+  # ---------------------------------------------------------------------------
+  # Markers — floor-level geometric idioms (path polylines / area polygons)
+  # that, unlike roads, aren't anchored to bldgs. Mirrors the road API.
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Returns the list of markers.
+  """
+  def list_markers do
+    Repo.all(Marker)
+  end
+
+  @doc """
+  Returns all markers directly on a given flr (not nested floors).
+  """
+  def list_markers_in_flr(flr) do
+    q = from m in Marker, where: m.flr == ^flr
+    Repo.all(q)
+  end
+
+  @doc """
+  Returns all markers (including nested) inside a given flr.
+  """
+  def list_all_markers_in_flr(flr) do
+    # Delimiter-safe: exact floor or a strict sub-path, so ".../l1" doesn't also
+    # match ".../l10". See Buildings.list_all_bldgs_in_flr/2.
+    flr_subtree = Utils.escape_like_pattern(flr) <> "/%"
+
+    q =
+      from m in Marker,
+        where: m.flr == ^flr or like(m.flr, ^flr_subtree)
+
+    Repo.all(q)
+  end
+
+  @doc """
+  Gets a single marker. Raises `Ecto.NoResultsError` if it does not exist.
+  """
+  def get_marker!(id), do: Repo.get!(Marker, id)
+
+  @doc """
+  Finds the marker named `name` on `flr`, or nil. (flr, name) is the marker's
+  identity — see `upsert_marker/1`.
+  """
+  def find_marker(flr, name) do
+    Repo.get_by(Marker, flr: flr, name: name)
+  end
+
+  @doc """
+  Creates a marker.
+  """
+  def create_marker(attrs \\ %{}) do
+    result =
+      %Marker{}
+      |> Marker.changeset(attrs)
+      |> Repo.insert()
+
+    broadcast_marker_change(result, "marker_created")
+    result
+  end
+
+  @doc """
+  Updates a marker.
+  """
+  def update_marker(%Marker{} = marker, attrs) do
+    result =
+      marker
+      |> Marker.changeset(attrs)
+      |> Repo.update()
+
+    broadcast_marker_change(result, "marker_updated")
+    result
+  end
+
+  @doc """
+  Creates or updates the marker identified by `(flr, name)` in `attrs`.
+
+  Idempotent: re-emitting an identical marker (watch / re-render passes) is a
+  no-op — no write, no broadcast — so repeated `/mark` says don't churn the
+  floor channel. A changed geometry/color/class/type updates the existing row
+  in place (same id), so clients can key on it.
+  """
+  def upsert_marker(attrs) do
+    attrs = stringify_keys(attrs)
+
+    case find_marker(attrs["flr"], attrs["name"]) do
+      nil ->
+        create_marker(attrs)
+
+      %Marker{} = existing ->
+        if marker_unchanged?(existing, attrs) do
+          {:ok, existing}
+        else
+          update_marker(existing, attrs)
+        end
+    end
+  end
+
+  @upsert_compared_fields ~w(xs ys color marker_class marker_type)
+
+  defp marker_unchanged?(%Marker{} = existing, attrs) do
+    Enum.all?(@upsert_compared_fields, fn field ->
+      # An attribute that's absent from the upsert payload isn't a change.
+      not Map.has_key?(attrs, field) or
+        Map.get(existing, String.to_existing_atom(field)) == attrs[field]
+    end)
+  end
+
+  defp stringify_keys(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
+  end
+
+  @doc """
+  Deletes a marker.
+  """
+  def delete_marker(%Marker{} = marker) do
+    flr = marker.flr
+    marker_id = marker.id
+    result = Repo.delete(marker)
+
+    case result do
+      {:ok, _} ->
+        BldgServer.Buildings.broadcast_to_floor_and_ancestors(flr, "marker_deleted", %{
+          id: marker_id
+        })
+
+      _ ->
+        :ok
+    end
+
+    result
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking marker changes.
+  """
+  def change_marker(%Marker{} = marker, attrs \\ %{}) do
+    Marker.changeset(marker, attrs)
+  end
+
+  defp broadcast_marker_change({:ok, %Marker{} = marker}, event) do
+    payload = BldgServerWeb.FloorChannel.serialize_marker(marker)
+    BldgServer.Buildings.broadcast_to_floor_and_ancestors(marker.flr, event, payload)
+  end
+
+  defp broadcast_marker_change(_, _), do: :ok
 end

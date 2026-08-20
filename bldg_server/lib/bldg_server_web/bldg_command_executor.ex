@@ -98,7 +98,10 @@ defmodule BldgServerWeb.BldgCommandExecutor do
           # nil.address — that raised an Internal Server Error (HTTP 500) for what
           # is a benign, self-correcting condition: batteries re-emit roads
           # idempotently, so a transient miss heals on a later pass.
-          IO.puts("~~ /connect skipped: endpoint not found on #{flr_url} (#{name1} and/or #{name2})")
+          IO.puts(
+            "~~ /connect skipped: endpoint not found on #{flr_url} (#{name1} and/or #{name2})"
+          )
+
           {:ok, :skipped}
 
         true ->
@@ -132,6 +135,53 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     end
   end
 
+  # Draw a floor-level marker: a `path` polyline or a closed `area` polygon
+  # through floor cells. Unlike /connect, markers aren't anchored to bldgs —
+  # points are literal floor-local cells. Grammar (space-tokenized):
+  #
+  #   /mark path with name <name> and points (x,y) (x,y) ... [and color <c>] [and class <k>]
+  #   /mark area with name <name> and points (x,y) (x,y) (x,y) ... [and color <c>] [and class <k>]
+  #
+  # kwargs may come in any order; `and` separators are optional; `name` is a
+  # single token. Identity is (flr, name): a repeat say upserts (no duplicates,
+  # and an unchanged re-emit is a no-op).
+  def execute_command(["/mark", kind, "with" | rest], msg) when kind in ["path", "area"] do
+    {name, points, color, klass} = parse_mark_kwargs(rest, nil, [], nil, nil)
+
+    if is_nil(name) or name == "" do
+      raise "/mark #{kind}: missing required `name` (e.g. `/mark #{kind} with name my-#{kind} and points (0,0) (1,1)`)"
+    end
+
+    min_points = if kind == "area", do: 3, else: 2
+
+    if length(points) < min_points do
+      raise "/mark #{kind}: needs at least #{min_points} points (got #{length(points)}), e.g. `and points (0,0) (1,1)`"
+    end
+
+    # validate that the actor resident/bldg has the sufficient permissions
+    container_bldg = Buildings.get_flr_bldg(msg["say_flr"]) |> Buildings.get_bldg!()
+
+    if not Buildings.is_authorized_owner?(msg["resident_email"], container_bldg) do
+      raise "#{msg["resident_email"]} is not authorized to create markers inside #{container_bldg.web_url}"
+    else
+      {xs, ys} = Enum.unzip(points)
+
+      marker = %{
+        "flr" => msg["say_flr"],
+        "name" => name,
+        "marker_type" => kind,
+        "xs" => xs,
+        "ys" => ys,
+        "color" => color,
+        "marker_class" => klass || "road",
+        "owners" => [msg["resident_email"]]
+      }
+
+      IO.puts("~~ /mark #{kind} #{name} on #{msg["say_flr"]} (#{length(points)} points)")
+      Relations.upsert_marker(marker)
+    end
+  end
+
   # Parse the optional `with color X and class Y and curve Z` tail of a
   # `/connect between A and B` command (any kwarg order/subset). Returns
   # {color, class, curve} where each may be nil if not specified. Also accepts
@@ -159,6 +209,39 @@ defmodule BldgServerWeb.BldgCommandExecutor do
 
   defp skip_and(["and" | rest]), do: rest
   defp skip_and(rest), do: rest
+
+  @mark_point_re ~r/^\((-?\d+),(-?\d+)\)$/
+
+  # Parse the `name X and points (x,y) ... and color C and class K` tail of a
+  # `/mark` command (any kwarg order/subset). `points` consumes every
+  # consecutive `(x,y)` token. Returns {name, [{x, y}], color, class}.
+  defp parse_mark_kwargs([], name, points, color, klass), do: {name, points, color, klass}
+
+  defp parse_mark_kwargs(["name", v | rest], _name, points, color, klass),
+    do: parse_mark_kwargs(skip_and(rest), v, points, color, klass)
+
+  defp parse_mark_kwargs(["points" | rest], name, _points, color, klass) do
+    {points, rest} = take_mark_points(rest, [])
+    parse_mark_kwargs(skip_and(rest), name, points, color, klass)
+  end
+
+  defp parse_mark_kwargs(["color", v | rest], name, points, _color, klass),
+    do: parse_mark_kwargs(skip_and(rest), name, points, v, klass)
+
+  defp parse_mark_kwargs(["class", v | rest], name, points, color, _klass),
+    do: parse_mark_kwargs(skip_and(rest), name, points, color, v)
+
+  defp parse_mark_kwargs([_ | rest], name, points, color, klass),
+    do: parse_mark_kwargs(rest, name, points, color, klass)
+
+  defp take_mark_points([tok | rest] = all, acc) do
+    case Regex.run(@mark_point_re, tok) do
+      [_, x, y] -> take_mark_points(rest, [{String.to_integer(x), String.to_integer(y)} | acc])
+      nil -> {Enum.reverse(acc), all}
+    end
+  end
+
+  defp take_mark_points([], acc), do: {Enum.reverse(acc), []}
 
   def fetch_data(data_url) do
     case data_url do
@@ -297,8 +380,8 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     # Loop through parameters with index
     Enum.with_index(parameters_tokens)
     |> Enum.reduce(
-      {name, web_url, summary, category, picture_url, data_url, state, color, size, variant, width,
-       height},
+      {name, web_url, summary, category, picture_url, data_url, state, color, size, variant,
+       width, height},
       fn
         {"name", i}, acc ->
           name = Enum.at(parameters_tokens, i + 1)
@@ -621,8 +704,40 @@ defmodule BldgServerWeb.BldgCommandExecutor do
         raise "Unauthorized"
 
       true ->
-        Buildings.update_bldg(bldg, %{field => cast_edit_value(field, value)})
-        IO.puts("bldg edited: #{bldg_url} #{field}=#{value}")
+        new_value = cast_edit_value(field, value)
+
+        new_value =
+          if field == "data" do
+            preserve_geometry_data_keys(bldg.data, new_value)
+          else
+            new_value
+          end
+
+        Buildings.update_bldg(bldg, %{field => new_value})
+        IO.puts("bldg edited: #{bldg_url} #{field}=#{new_value}")
+    end
+  end
+
+  # The server injects prefab-geometry keys (flr heights / indents) into a
+  # composite bldg's `data` at CREATE time (add_composite_bldg_metadata), and
+  # the client positions the bldg's CONTENTS from them. A battery's
+  # `/edit <name> data {...}` (e.g. file-system-battery's attach_raw_data)
+  # would otherwise silently clobber them — the bldg's interior then loses its
+  # floor reference and renders at the bldg baseline. Preserve any geometry
+  # key the new payload doesn't explicitly set.
+  @geometry_data_keys ~w(flr_height flr0_height flr_indent stairs_indent)
+  defp preserve_geometry_data_keys(existing_json, new_json) do
+    with existing when is_binary(existing) <- existing_json,
+         {:ok, existing_map} when is_map(existing_map) <- JSON.decode(existing),
+         {:ok, new_map} when is_map(new_map) <- JSON.decode(new_json) do
+      preserved = Map.take(existing_map, @geometry_data_keys)
+
+      case Map.merge(preserved, new_map) do
+        merged when merged == new_map -> new_json
+        merged -> JSON.encode!(merged)
+      end
+    else
+      _ -> new_json
     end
   end
 
