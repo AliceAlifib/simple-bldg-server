@@ -377,6 +377,21 @@ defmodule BldgServerWeb.BldgCommandExecutor do
     width = nil
     height = nil
 
+    # `summary` is free text and must be the LAST parameter: everything after
+    # the first `summary` token is the summary, verbatim. The keyword scan
+    # below only sees the tokens BEFORE it — previously a keyword word inside
+    # the summary text ("...I wrote name generating SW...") re-bound that
+    # field, silently hijacking the bldg's name/color/state with prose.
+    {parameters_tokens, summary} =
+      case Enum.find_index(parameters_tokens, &(&1 == "summary")) do
+        nil ->
+          {parameters_tokens, summary}
+
+        idx ->
+          {Enum.take(parameters_tokens, idx),
+           parameters_tokens |> Enum.drop(idx + 1) |> Enum.join(" ")}
+      end
+
     # Loop through parameters with index
     Enum.with_index(parameters_tokens)
     |> Enum.reduce(
