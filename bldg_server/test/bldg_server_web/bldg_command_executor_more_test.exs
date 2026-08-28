@@ -54,7 +54,19 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
     test "parses `with color X and class Y`", %{msg: msg} do
       {:ok, road} =
         BldgCommandExecutor.execute_command(
-          ["/connect", "between", "a", "and", "b", "with", "color", "red", "and", "class", "lane"],
+          [
+            "/connect",
+            "between",
+            "a",
+            "and",
+            "b",
+            "with",
+            "color",
+            "red",
+            "and",
+            "class",
+            "lane"
+          ],
           msg
         )
 
@@ -65,7 +77,19 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
     test "parses the reverse order `with class Y and color X`", %{msg: msg} do
       {:ok, road} =
         BldgCommandExecutor.execute_command(
-          ["/connect", "between", "a", "and", "b", "with", "class", "highway", "and", "color", "blue"],
+          [
+            "/connect",
+            "between",
+            "a",
+            "and",
+            "b",
+            "with",
+            "class",
+            "highway",
+            "and",
+            "color",
+            "blue"
+          ],
           msg
         )
 
@@ -107,8 +131,22 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
     test "parses `curve never` alongside color and class", %{msg: msg} do
       {:ok, road} =
         BldgCommandExecutor.execute_command(
-          ["/connect", "between", "a", "and", "b", "with", "color", "blue", "and",
-           "class", "lane", "and", "curve", "never"],
+          [
+            "/connect",
+            "between",
+            "a",
+            "and",
+            "b",
+            "with",
+            "color",
+            "blue",
+            "and",
+            "class",
+            "lane",
+            "and",
+            "curve",
+            "never"
+          ],
           msg
         )
 
@@ -132,7 +170,14 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
   describe "/demote bldg inside" do
     test "raises a clear error when the bldg was never promoted (no matching picture-url key)" do
       bldg(%{bldg_url: "g/team", address: "g/team", name: "team", data: "{}"})
-      bldg(%{bldg_url: "g/team/l0/thing", address: "g/team/l0/b(1,1)", flr: "g/team/l0", name: "thing", picture_url: "http://pic/thing.png"})
+
+      bldg(%{
+        bldg_url: "g/team/l0/thing",
+        address: "g/team/l0/b(1,1)",
+        flr: "g/team/l0",
+        name: "thing",
+        picture_url: "http://pic/thing.png"
+      })
 
       assert_raise RuntimeError, ~r/not promoted/, fn ->
         BldgCommandExecutor.execute_command(
@@ -160,7 +205,10 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
       %{msg: msg, owner: owner}
     end
 
-    test "derives the child flr from the container's address, not its bldg_url", %{msg: msg, owner: owner} do
+    test "derives the child flr from the container's address, not its bldg_url", %{
+      msg: msg,
+      owner: owner
+    } do
       {:ok, child} =
         BldgCommandExecutor.execute_command(
           ["/create", "task", "bldg", "with", "name", "mytask"],
@@ -174,14 +222,33 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
       assert owner in child.owners
     end
 
-    test "summary greedily joins multiple words and stops at the next keyword", %{msg: msg} do
+    test "summary is terminal: free text keeps keyword words verbatim", %{msg: msg} do
+      # summary must be the LAST parameter (every emitter puts it last); in
+      # return, keyword words INSIDE the text no longer re-bind fields — a
+      # tweet containing "name"/"state"/"color" used to hijack them.
       {:ok, child} =
         BldgCommandExecutor.execute_command(
-          ["/create", "task", "bldg", "with", "name", "t", "summary", "quite", "a", "long", "one", "state", "Todo"],
+          [
+            "/create",
+            "task",
+            "bldg",
+            "with",
+            "name",
+            "t",
+            "state",
+            "Todo",
+            "summary",
+            "quite",
+            "a",
+            "long",
+            "one",
+            "state",
+            "Done"
+          ],
           msg
         )
 
-      assert child.summary == "quite a long one"
+      assert child.summary == "quite a long one state Done"
       assert child.state == "Todo"
     end
 
@@ -196,7 +263,8 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
       assert child.height == 2
     end
 
-    test "defaults to a 1x1 footprint when dimensions are omitted, and a non-integer is ignored", %{msg: msg} do
+    test "defaults to a 1x1 footprint when dimensions are omitted, and a non-integer is ignored",
+         %{msg: msg} do
       {:ok, child} =
         BldgCommandExecutor.execute_command(
           ["/create", "task", "bldg", "with", "name", "t", "width", "wide"],
@@ -207,14 +275,30 @@ defmodule BldgServerWeb.BldgCommandExecutorMoreTest do
       assert child.height == 1
     end
 
-    test "summary stops at the width keyword rather than swallowing it", %{msg: msg} do
+    test "keyword words inside the summary don't re-bind fields", %{msg: msg} do
       {:ok, child} =
         BldgCommandExecutor.execute_command(
-          ["/create", "task", "bldg", "with", "name", "t", "summary", "a", "tall", "one", "height", "4"],
+          [
+            "/create",
+            "task",
+            "bldg",
+            "with",
+            "name",
+            "t",
+            "height",
+            "4",
+            "summary",
+            "I",
+            "wrote",
+            "name",
+            "generating",
+            "SW"
+          ],
           msg
         )
 
-      assert child.summary == "a tall one"
+      assert child.summary == "I wrote name generating SW"
+      assert child.name == "t"
       assert child.height == 4
     end
 

@@ -54,6 +54,71 @@ defmodule BldgServer.BuildingsCascadeTest do
     end
   end
 
+  describe "markers follow the bldg cascades" do
+    alias BldgServer.Relations
+    alias BldgServer.Relations.Marker
+    alias BldgServer.Repo
+
+    setup do
+      seed_ground_floor()
+      :ok
+    end
+
+    test "delete_bldg_cascade/1 sweeps markers on the target's and nested floors, leaving others" do
+      target = bldg(%{flr: "g", address: "g/b(1,2)", bldg_url: "g/b(1,2)", name: "target"})
+      bldg(%{flr: "g/b(1,2)/l0", address: "g/b(1,2)/l0/b(1,1)", bldg_url: "g/b(1,2)/l0/b(1,1)", name: "child"})
+
+      on_target_flr = marker(%{flr: "g/b(1,2)/l0", name: "spine"})
+      on_child_flr = marker(%{flr: "g/b(1,2)/l0/b(1,1)/l0", name: "inner"})
+      unrelated = marker(%{flr: "g/b(3,4)/l0", name: "elsewhere"})
+
+      assert {:ok, _} = Buildings.delete_bldg_cascade(target)
+
+      refute Repo.get(Marker, on_target_flr.id)
+      refute Repo.get(Marker, on_child_flr.id)
+      assert Repo.get(Marker, unrelated.id)
+    end
+
+    test "delete_bldg_cascade/1 does not sweep markers on a numerically-prefixed sibling floor (l1 vs l10)" do
+      target = bldg(%{flr: "g", address: "g/b(1,2)", bldg_url: "g/b(1,2)", name: "target"})
+      sibling = bldg(%{flr: "g", address: "g/b(1,20)", bldg_url: "g/b(1,20)", name: "sibling"})
+
+      on_target = marker(%{flr: "g/b(1,2)/l0", name: "a"})
+      on_sibling = marker(%{flr: "g/b(1,20)/l0", name: "b"})
+
+      assert {:ok, _} = Buildings.delete_bldg_cascade(target)
+
+      refute Repo.get(Marker, on_target.id)
+      assert Repo.get(Marker, on_sibling.id)
+      assert bldg_exists?(sibling.address)
+    end
+
+    test "relocating a container rebases marker flr, points untouched" do
+      container = bldg(%{address: "g/b(5,5)", bldg_url: "g/b(5,5)", flr: "g", name: "team"})
+      bldg(%{address: "g/b(5,5)/l0/b(1,1)", bldg_url: "g/b(5,5)/l0/b(1,1)", flr: "g/b(5,5)/l0", name: "a"})
+
+      direct = marker(%{flr: "g/b(5,5)/l0", name: "spine", xs: [0, 3, 6], ys: [0, 0, 0]})
+      nested = marker(%{flr: "g/b(5,5)/l0/b(1,1)/l0", name: "inner", xs: [1, 2], ys: [1, 2]})
+      elsewhere = marker(%{flr: "g/b(7,7)/l0", name: "other"})
+
+      assert {:ok, _} =
+               Buildings.update_bldg(container, %{"address" => "g/b(9,9)", "bldg_url" => "g/b(9,9)"})
+
+      direct = Repo.get(Marker, direct.id)
+      assert direct.flr == "g/b(9,9)/l0"
+      assert {direct.xs, direct.ys} == {[0, 3, 6], [0, 0, 0]}
+
+      nested = Repo.get(Marker, nested.id)
+      assert nested.flr == "g/b(9,9)/l0/b(1,1)/l0"
+      assert {nested.xs, nested.ys} == {[1, 2], [1, 2]}
+
+      assert Repo.get(Marker, elsewhere.id).flr == "g/b(7,7)/l0"
+
+      # still findable by its (new flr, name) identity
+      assert Relations.find_marker("g/b(9,9)/l0", "spine").id == direct.id
+    end
+  end
+
   defp bldg_exists?(address) do
     match?(%BldgServer.Buildings.Bldg{}, BldgServer.Repo.get_by(BldgServer.Buildings.Bldg, address: address))
   end

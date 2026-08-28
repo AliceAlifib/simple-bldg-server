@@ -65,6 +65,37 @@ defmodule BldgServerWeb.BldgCommandExecutorTest do
       assert Buildings.get_by_bldg_url(@bldg_url).state == "Done"
     end
 
+    test "data edit preserves server-injected geometry keys" do
+      create_bldg()
+      bldg = Buildings.get_by_bldg_url(@bldg_url)
+      # simulate add_composite_bldg_metadata's create-time injection
+      {:ok, _} =
+        Buildings.update_bldg(bldg, %{
+          "data" => ~s({"flr0_height":"0.022","flr_height":"0.9"})
+        })
+
+      BldgCommandExecutor.execute_command(
+        ["/edit", @bldg_name, "data", ~s({"id":47,"kind":"Ideas"})],
+        msg()
+      )
+
+      data = JSON.decode!(Buildings.get_by_bldg_url(@bldg_url).data)
+      assert data["id"] == 47 and data["kind"] == "Ideas"
+      # geometry keys survive the payload that didn't mention them...
+      assert data["flr0_height"] == "0.022" and data["flr_height"] == "0.9"
+
+      # ...but an explicit value in the new payload wins
+      BldgCommandExecutor.execute_command(
+        ["/edit", @bldg_name, "data", ~s({"id":48,"flr0_height":"0.5"})],
+        msg()
+      )
+
+      data = JSON.decode!(Buildings.get_by_bldg_url(@bldg_url).data)
+      assert data["flr0_height"] == "0.5"
+      assert data["flr_height"] == "0.9"
+      refute Map.has_key?(data, "kind")
+    end
+
     test "joins multi-word values with spaces" do
       create_bldg()
 

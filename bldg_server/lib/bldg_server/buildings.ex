@@ -538,8 +538,8 @@ defmodule BldgServer.Buildings do
 
   @doc """
   Deletes a bldg and all nested children (cascade).
-  Deletes deepest children first, then roads, then the target bldg.
-  Each deletion broadcasts its own bldg_deleted/road_deleted event.
+  Deletes deepest children first, then roads/markers, then the target bldg.
+  Each deletion broadcasts its own bldg_deleted/road_deleted/marker_deleted event.
   """
   def delete_bldg_cascade(%Bldg{} = bldg) do
     # Find all nested child bldgs
@@ -549,16 +549,22 @@ defmodule BldgServer.Buildings do
     children
     |> Enum.sort_by(& &1.nesting_depth, :desc)
     |> Enum.each(fn child ->
-      # Delete roads on the child's floors
+      # Delete roads and markers on the child's floors
       BldgServer.Relations.list_all_roads_in_flr(child.address)
       |> Enum.each(&BldgServer.Relations.delete_road/1)
+
+      BldgServer.Relations.list_all_markers_in_flr(child.address)
+      |> Enum.each(&BldgServer.Relations.delete_marker/1)
 
       delete_bldg(child)
     end)
 
-    # Delete roads on the target bldg's floors
+    # Delete roads and markers on the target bldg's floors
     BldgServer.Relations.list_all_roads_in_flr(bldg.address)
     |> Enum.each(&BldgServer.Relations.delete_road/1)
+
+    BldgServer.Relations.list_all_markers_in_flr(bldg.address)
+    |> Enum.each(&BldgServer.Relations.delete_marker/1)
 
     # Delete the target bldg itself
     delete_bldg(bldg)
@@ -609,6 +615,15 @@ defmodule BldgServer.Buildings do
       }
 
       BldgServer.Relations.update_road(road, attrs)
+    end)
+
+    # Markers on descendant floors: rebase the floor only — their points are
+    # floor-local cells and unchanged.
+    old_address
+    |> BldgServer.Relations.list_all_markers_in_flr()
+    |> Enum.each(fn marker ->
+      attrs = %{"flr" => rebase_segment(marker.flr, old_addr_root, new_addr_root)}
+      BldgServer.Relations.update_marker(marker, attrs)
     end)
   end
 

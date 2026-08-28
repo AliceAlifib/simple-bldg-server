@@ -78,9 +78,13 @@ defmodule BldgServerWeb.Router do
     get("/roads/look/:flr", RoadController, :look)
     get("/roads/scan/:flr", RoadController, :scan)
 
+    get("/markers/look/:flr", MarkerController, :look)
+    get("/markers/scan/:flr", MarkerController, :scan)
+
     resources("/bldgs", BldgController, except: [:new, :edit], param: "address")
     resources("/residents", ResidentController, except: [:new, :edit])
     resources("/roads", RoadController, except: [:new, :edit])
+    resources("/markers", MarkerController, except: [:new, :edit])
   end
 
   # --- Trusted service (alice-in-goals) -------------------------------------
@@ -114,6 +118,7 @@ defmodule BldgServerWeb.Router do
 
     # Bulk floor deletes are driven by the file-system-battery's re-render flow.
     post("/roads/delete_in_flr", RoadController, :delete_in_flr)
+    post("/markers/delete_in_flr", MarkerController, :delete_in_flr)
     post("/bldgs/delete_in_flr", BldgController, :delete_in_flr)
 
     get("/staging/data/:namespace/:entity_type", StagingController, :read_by_type)

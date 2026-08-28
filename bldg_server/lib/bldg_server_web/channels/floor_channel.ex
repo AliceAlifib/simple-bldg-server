@@ -28,11 +28,13 @@ defmodule BldgServerWeb.FloorChannel do
     bldgs = Buildings.list_all_bldgs_in_flr(flr)
     residents = Residents.list_all_residents_in_flr(flr)
     roads = Relations.list_all_roads_in_flr(flr)
+    markers = Relations.list_all_markers_in_flr(flr)
 
     push(socket, "scan_result", %{
       bldgs: Enum.map([container | bldgs], &serialize_bldg/1),
       residents: Enum.map(residents, &serialize_resident_public/1),
-      roads: Enum.map(roads, &serialize_road/1)
+      roads: Enum.map(roads, &serialize_road/1),
+      markers: Enum.map(markers, &serialize_marker/1)
     })
 
     {:noreply, socket}
@@ -119,6 +121,22 @@ defmodule BldgServerWeb.FloorChannel do
       color: road.color,
       road_class: road.road_class,
       curve: road.curve
+    }
+  end
+
+  # Same shape as MarkerView.render("marker.json").
+  def serialize_marker(marker) do
+    %{
+      id: marker.id,
+      flr: marker.flr,
+      name: marker.name,
+      marker_type: marker.marker_type,
+      xs: marker.xs,
+      ys: marker.ys,
+      color: marker.color,
+      marker_class: marker.marker_class,
+      owners: marker.owners,
+      data: marker.data
     }
   end
 end

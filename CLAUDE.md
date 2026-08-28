@@ -19,7 +19,8 @@ mix phx.server            # Start dev server (HTTP :4000, HTTPS :4443)
 mix test                  # Run all tests
 mix test test/path_test.exs          # Run a single test file
 mix test test/path_test.exs:42       # Run a specific test by line
-mix coveralls               # Run tests with coverage (ExCoveralls)
+mix coveralls             # Run tests with coverage (ExCoveralls)
+mix format                # Format (config in .formatter.exs; imports ecto + phoenix)
 ```
 
 The `mix test` alias auto-runs `ecto.create` and `ecto.migrate` before tests (test DB: `bldg_server_test`).
@@ -29,7 +30,7 @@ Docker for local dev (starts PostgreSQL):
 docker-compose up
 ```
 
-The app requires `REDIS_HOST`, `REDIS_PWD`, and `REDIS_PORT` env vars at startup (hard-crashes without them). DB config reads `DB_USER`, `DB_PASSWORD`, `DB_HOST` with defaults.
+`application.ex` reads `REDIS_HOST`, `REDIS_PWD`, `REDIS_PORT` via `System.fetch_env!` at boot, so **dev hard-crashes without them**; `config/runtime.exs` injects localhost/6379/blank defaults for `MIX_ENV=test` only. A blank `REDIS_PWD` is treated as "no auth" (no `AUTH ""` sent), so a stock password-less local Redis works. DB config reads `DB_USER`, `DB_PASSWORD`, `DB_HOST` with defaults.
 
 Production release runs migrations via `/app/bin/migrate`.
 
@@ -41,6 +42,7 @@ Production release runs migrations via `/app/bin/migrate`.
 - **Resident** (`lib/bldg_server/residents.ex`) — User accounts with email-based passwordless auth (magic link verification).
 - **Battery** (`lib/bldg_server/batteries.ex`) — External data source integrations that attach to buildings and sync data.
 - **Road** (`lib/bldg_server/relations.ex`) — Relationships/connections between buildings.
+- **Marker** (`lib/bldg_server/relations.ex`, schema in `relations/marker.ex`) — Floor-level geometric idiom that, unlike a road, isn't anchored to bldgs: `marker_type` `path` (polyline, ≥2 points) or `area` (closed polygon, ≥3 points) through floor-local cells (`xs`/`ys` pairwise integer arrays), with optional `color`, `marker_class` (`highway|road|lane|path`, default `road`), `owners`, `data`. Identity is `(flr, name)` (unique index) so `Relations.upsert_marker/1` is idempotent — an unchanged re-emit is a no-op (no write/broadcast), a changed one updates in place (same id). Swept by `delete_bldg_cascade/1` and `flr`-rebased by `relocate_bldg_cascade/3` like roads; broadcasts `marker_created/updated/deleted` and rides `scan_result.markers` on the floor channel.
 
 ### Key Subsystems
 
@@ -50,6 +52,27 @@ Production release runs migrations via `/app/bin/migrate`.
 - **StagingController** — Manages temporary/staged data in the graph DB with namespace/entity_type organization.
 - **Notifications** (`lib/bldg_server/notifications.ex`) — Propagates creation/update events up the container hierarchy.
 - **FloorChannel** (`lib/bldg_server_web/channels/floor_channel.ex`) — Phoenix Channel on `floor:*` topics that streams real-time `bldg_created/updated/deleted`, `resident_*`, and `road_*` events to clients (replaces HTTP polling). Mutations in `Buildings`/`Residents`/`Relations` broadcast to the target floor **and every ancestor floor**, so clients doing recursive `scan` receive nested changes.
+
+### Chat Commands
+
+`POST /v1/residents/act` with `action_type: "SAY"` → `Residents.say/2` persists the message and, if `is_command/1` (text starts with `/`), fire-and-forget-broadcasts it on the "chat" PubSub topic. `BldgCommandExecutor.handle_info/2` splits `say_text` on spaces and pattern-matches the token list in `execute_command/2`. The grammar (one clause per shape):
+
+```
+/create {entity_type} bldg with {k} {v} and {k} {v} ...   # name, summary, x/y, width/height, ...
+/connect between {name1} and {name2} [with color X and class Y and curve Z]
+/mark path|area with name {name} and points (x,y) (x,y) ... [and color X] [and class Y]   # kwargs any order; upserts by (flr, name)
+/edit {name} {field} {value...}        # @editable_fields: state summary category picture_url web_url data tags color size variant
+/delete bldg {name}
+/add owner {email} to bldg {name}   |  /remove owner {email} from bldg {name}
+/move bldg {name} here     |  /relocate bldg {bldg_url} here
+/promote bldg {name} inside  |  /demote bldg {name} inside
+```
+
+Conventions that bite when adding a command:
+- **The message map has string keys** (it comes from the JSON body and is broadcast verbatim). Clauses must destructure `%{"say_location" => ...}`, not atom keys — an atom-key pattern silently never matches and falls through to the next clause. (`/move bldg ... here` at `bldg_command_executor.ex:419` currently has this defect and always hits its own "missing parameters" error clause.)
+- Every command ends in a *terminal* keyword (`here`, `inside`, `bldg {name}`) because parsing is positional token matching, not a real parser. Each real clause is paired with a fallback clause that raises a descriptive "missing required say fields" error.
+- Execution is **async** — the HTTP caller already got a 200. `handle_info` wraps execution in `try/rescue` so an `Unauthorized` raise or a missing bldg doesn't crash the GenServer and drop its "chat" subscription; failures only show up as `Logger.error`. This is why `create_bldg` logs insert failures loudly.
+- Authorization inside commands is `Buildings.is_authorized_owner?/2` + `raise "Unauthorized"` — not the `ResidentAuth` plugs (which only guard the HTTP layer).
 
 ### Address System
 
@@ -75,6 +98,7 @@ All API routes are under `/v1/` (see `lib/bldg_server_web/router.ex`):
 - `/bldgs/*` — Building CRUD, lookup by address/url, `look`/`scan` for listing, `relocate_to`, `favorite_view_points`, `delete_in_flr` (bulk)
 - `/residents/*` — Auth (login/verify), resident actions, `look`/`scan`
 - `/roads/*` — Relationship management, `look`/`scan`, `delete_in_flr` (bulk)
+- `/markers/*` — Marker CRUD, `look`/`scan`, `delete_in_flr` (bulk) — same shape as roads
 - `/batteries/*` — Register/unregister, attach/detach, act
 - `/staging/*` — Read/write/query staged data by namespace
 
@@ -82,9 +106,20 @@ All API routes are under `/v1/` (see `lib/bldg_server_web/router.ex`):
 
 Bldgs carry a `favorite_view_points` array of named camera poses (`address`, `direction`, `size_delta`, `camera_vertical_angle`); appended via `POST /v1/bldgs/:address/favorite_view_points`.
 
+## Testing
+
+The suite needs **both PostgreSQL and a running local Redis** — `bldg_command_executor_more_test.exs` issues real `Redix.command(:redix, ...)` calls against `localhost:6379`, so a missing Redis fails those tests rather than skipping them.
+
+- **`BldgServer.Factory`** (`test/support/factory.ex`, auto-imported by `DataCase`/`ConnCase`/`ChannelCase`) builds records **directly via `Repo`**, deliberately bypassing the notify/broadcast side effects in the context `create_*` functions. Use it for cheap setup; call the context function itself when the test is exercising that create path. Coords/emails default to unique values to dodge `unique_constraint` collisions.
+- **`Factory.seed_ground_floor/0` is required** before any test that calls `Buildings.create_bldg/1` for a bldg rooted on `g` — `notify_bldg_created/4` looks up the container floor and blows up if `g` is absent.
+- **External HTTP boundaries are faked with a throwaway `Plug.Cowboy` server**, not Bypass (see the comment in `mix.exs`: Bypass pins ranch ~> 1.3, which conflicts with the ranch 2.x cowboy 2.14 requires). The pattern — a tiny `Catcher`/`FakeDgraph` plug started on a fixed port with `test_pid: self()`, torn down in `on_exit`, asserting on forwarded messages — lives in `battery_dispatch_test.exs`, `battery_chat_dispatcher_test.exs`, and `staging_controller_test.exs`. `:dgraph_url` is repointed at the fake via `Application.put_env`.
+- **Outbound mail** uses `Bamboo.TestAdapter` in test config, so assert with `Bamboo.Test`'s `assert_delivered_email/1`. `runtime.exs` explicitly skips the SendGrid adapter block in test — it runs *after* compile-time config and would otherwise clobber it, making login tests hit the real SendGrid.
+- **Auth-enforcement tests flip the flag at runtime**: `Application.put_env(:bldg_server, :enforce_auth, true)` with the previous value restored in `on_exit` (see `resident_auth_test.exs`). Since the default is `false`, a test asserting a 401/403 must set it explicitly.
+- Tests default to the **shared** SQL sandbox (`ConnCase`/`DataCase` set `{:shared, self()}` unless `async: true`), which is what lets GenServer-driven code (command executor, dispatcher) see test data.
+
 ## Deployment
 
-Deployed to Fly.io via split dev/prod stacks (`bldg_server/fly.dev.toml`, `bldg_server/fly.prod.toml`), primary region SJC. GitHub Actions: `elixir.yml` runs `mix test` on pushes/PRs to master; `deploy.yml` auto-deploys master to the dev stack on push, while prod deploys are manual (`workflow_dispatch` with target `prod`). Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`, plus the auth secrets `MAGIC_LINK_SALT`, `AUTH_TOKEN_SALT`, and (optional) `ENFORCE_AUTH`, `BATTERY_PROVISION_TOKEN`, `CORS_ORIGINS`, `BATTERY_URL_ALLOWED_HOSTS`. No secret material lives in source — all signing keys/salts are env-sourced in `config/runtime.exs` (dev/test fall back to clearly non-secret defaults; prod fails loud). Sentry is wired in for error reporting, with a `BldgServer.SentryScrubber` `before_send` hook that redacts PII/credentials.
+Deployed to Fly.io via split dev/prod stacks (`bldg_server/fly.dev.toml`, `bldg_server/fly.prod.toml`), primary region SJC. GitHub Actions: `deploy.yml` auto-deploys master to the dev stack on push, while prod deploys are manual (`workflow_dispatch` with target `prod`). **`elixir.yml` is broken and has failed on every run for months** — it runs from the repo root (no `mix.exs` there; the project lives in `bldg_server/`), pins Elixir 1.10.3 / OTP 22.3 against a codebase built on 1.16.2 / OTP 26.2.2, and provisions no Postgres or Redis service containers. Treat CI as *not* covering tests: run `mix test` locally before pushing. Multi-stage Dockerfile using Elixir 1.16.2 / OTP 26.2.2. Key env vars configured via Fly secrets: `DB_*`, `REDIS_*`, `DGRAPH_URL`, `SENDGRID_API_KEY`, `SECRET_KEY_BASE`, plus the auth secrets `MAGIC_LINK_SALT`, `AUTH_TOKEN_SALT`, and (optional) `ENFORCE_AUTH`, `BATTERY_PROVISION_TOKEN`, `CORS_ORIGINS`, `BATTERY_URL_ALLOWED_HOSTS`. No secret material lives in source — all signing keys/salts are env-sourced in `config/runtime.exs` (dev/test fall back to clearly non-secret defaults; prod fails loud). Sentry is wired in for error reporting, with a `BldgServer.SentryScrubber` `before_send` hook that redacts PII/credentials.
 
 ### Ownership & Authorization
 
@@ -150,3 +185,10 @@ The staging API uses DGraph with DQL queries. The `namespace` concept is stored 
 - `Buildings.delete_bldg_cascade/1` deletes nested descendants deepest-first plus their roads before the target; residents inside deleted bldgs are left untouched. `DELETE /v1/bldgs/:address` and the `/delete bldg {name}` chat command both route through it (authorized via `is_authorized_owner?/2`).
 - Roads cache `from_address`/`to_address` and endpoint coordinates at creation. `Buildings.update_bldg/2` diffs the `address` on update and, on change, calls `Relations.cascade_bldg_relocation/3` to rewrite matching endpoints (following the flr when the road lived on the bldg's prior floor) and re-broadcast `road_updated`. Skipping this leaves roads visually dangling at the old position.
 - **Container relocation**: when `update_bldg/2` sees a container's `address` change, `Buildings.relocate_bldg_cascade/3` re-homes the whole nested subtree via `Address.rebase/3` — each descendant bldg's `address`/`flr` is rebased on the new address root and its `bldg_url`/`flr_url` on the new bldg_url root (the two move independently when the container is name-aliased), and roads on descendant floors have their `flr`/endpoints rebased (endpoint coords are floor-local, so preserved). Descendant lookup is delimiter-safe (`list_all_bldgs_in_flr/2` matches `flr == X` or `"X/%"`, never a bare `"X%"` prefix), so sibling subtrees are untouched.
+
+**`/edit data` preserves geometry keys.** `add_composite_bldg_metadata` injects
+`flr_height`/`flr0_height`/`flr_indent`/`stairs_indent` into a composite bldg's
+`data` at CREATE time, and the client positions the bldg's contents from them.
+A battery's `/edit <name> data {...}` (file-system-battery `attach_raw_data`)
+would clobber them — `preserve_geometry_data_keys` in the executor merges any
+geometry key the new payload doesn't explicitly set (explicit values still win).
