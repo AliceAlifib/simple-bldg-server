@@ -516,8 +516,11 @@ defmodule BldgServerWeb.BldgCommandExecutor do
   # move bldg
   def execute_command(
         ["/move", "bldg", name, "here"],
-        %{say_location: say_location, say_flr_url: say_flr_url, resident_email: resident_email} =
-          msg
+        %{
+          "say_location" => say_location,
+          "say_flr_url" => say_flr_url,
+          "resident_email" => resident_email
+        } = msg
       ) do
     # update the location of the bldg with the given name to the say location
     # TODO composite bldgs should update the location of their children bldgs as well

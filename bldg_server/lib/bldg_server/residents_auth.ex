@@ -56,9 +56,12 @@ defmodule BldgServer.ResidentsAuth do
     verified_status = verified()
     # lookup a session with verified status & the given resident_id & ip_address
     # TODO add migration to create the corresponding index in the DB
+    # Schemaless query: without the explicit type, session_id comes back as the
+    # raw 16-byte binary, which then gets baked into the bearer token and makes
+    # every later request carrying it fail the session lookup.
     query = from s in "sessions",
       where: s.resident_id == ^resident_id and s.ip_address == ^ip_address and s.status == ^verified_status,
-      select: {s.session_id, s.updated_at}
+      select: {type(s.session_id, Ecto.UUID), s.updated_at}
     Repo.all(last(query, :updated_at))
   end
 

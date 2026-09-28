@@ -55,6 +55,24 @@ defmodule BldgServerWeb.ResidentAuthTest do
       assert ResidentAuth.resident_from_token(token) == nil
     end
 
+    test "a token minted from the 'already verified' login lookup resolves the resident" do
+      # Regression: get_most_recent_verified_session/2 returned the raw 16-byte
+      # UUID, so the token it fed into was rejected (400 on every request).
+      resident = make_resident("reuse@example.com")
+      {sid, _} = verified_session_token(resident)
+      [{found_sid, _updated_at}] = ResidentsAuth.get_most_recent_verified_session(resident.id, "127.0.0.1")
+      assert found_sid == sid
+      token = BldgServer.Token.generate_auth_token(resident.id, found_sid)
+      assert %{id: id} = ResidentAuth.resident_from_token(token)
+      assert id == resident.id
+    end
+
+    test "returns nil (not a CastError) for a signed token with a malformed session id" do
+      resident = make_resident("badsid@example.com")
+      token = BldgServer.Token.generate_auth_token(resident.id, <<30, 245, 85, 188, 234, 218, 73, 9, 169, 166, 107, 122, 138, 194, 184, 206>>)
+      assert ResidentAuth.resident_from_token(token) == nil
+    end
+
     test "returns nil for a garbage / tampered token" do
       assert ResidentAuth.resident_from_token("not-a-real-token") == nil
       assert ResidentAuth.resident_from_token(nil) == nil
