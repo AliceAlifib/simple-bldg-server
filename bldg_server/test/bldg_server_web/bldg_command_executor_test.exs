@@ -56,6 +56,40 @@ defmodule BldgServerWeb.BldgCommandExecutorTest do
     :ok
   end
 
+  describe "/move command" do
+    # Regression: the clause matched atom keys, but chat messages arrive with
+    # string keys, so every /move fell through to "Missing required say fields".
+    test "moves the bldg to the speaker's say_location" do
+      create_bldg()
+
+      BldgCommandExecutor.execute_command(
+        ["/move", "bldg", @bldg_name, "here"],
+        msg(%{"say_location" => "g/b(7,9)"})
+      )
+
+      moved = Buildings.get_by_bldg_url(@bldg_url)
+      assert moved.address == "g/b(7,9)"
+      assert {moved.x, moved.y} == {7, 9}
+    end
+
+    test "raises Unauthorized when the speaker is not an owner" do
+      create_bldg()
+
+      assert_raise RuntimeError, "Unauthorized", fn ->
+        BldgCommandExecutor.execute_command(
+          ["/move", "bldg", @bldg_name, "here"],
+          msg(%{"say_location" => "g/b(7,9)", "resident_email" => @other_email})
+        )
+      end
+    end
+
+    test "still reports missing say fields" do
+      assert_raise RuntimeError, ~r/Missing required say fields/, fn ->
+        BldgCommandExecutor.execute_command(["/move", "bldg", @bldg_name, "here"], %{"say_text" => "x"})
+      end
+    end
+  end
+
   describe "/edit command" do
     test "edits a single-word scalar field" do
       create_bldg()

@@ -90,6 +90,9 @@ defmodule BldgServerWeb.ResidentAuth do
   """
   def resident_from_token(token) when is_binary(token) do
     with {:ok, %{resident_id: rid, session_id: sid}} <- BldgServer.Token.verify_auth_token(token),
+         # a malformed session id (e.g. from a pre-fix token) is "no resident",
+         # not a CastError that turns every request into a 400
+         {:ok, sid} <- Ecto.UUID.cast(sid),
          %Session{} = session <- ResidentsAuth.get_session_by_session_id(sid),
          ^rid <- session.resident_id,
          verified when verified == session.status <- ResidentsAuth.verified() do
