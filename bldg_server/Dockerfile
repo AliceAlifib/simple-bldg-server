@@ -7,13 +7,13 @@
 # This file is based on these images:
 #
 #   - https://hub.docker.com/r/hexpm/elixir/tags - for the build image
-#   - https://hub.docker.com/_/debian?tab=tags&page=1&name=bullseye-20240130-slim - for the release image
+#   - https://hub.docker.com/_/debian?tab=tags&page=1&name=bookworm-20260610-slim - for the release image
 #   - https://pkgs.org/ - resource for finding needed packages
-#   - Ex: hexpm/elixir:1.16.2-erlang-26.2.2-debian-bullseye-20240130-slim
+#   - Ex: hexpm/elixir:1.16.2-erlang-26.2.2-debian-bookworm-20260610-slim
 #
 ARG ELIXIR_VERSION=1.16.2
 ARG OTP_VERSION=26.2.2
-ARG DEBIAN_VERSION=bullseye-20240130-slim
+ARG DEBIAN_VERSION=bookworm-20260610-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
@@ -21,10 +21,7 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 FROM ${BUILDER_IMAGE} as builder
 
 # install build dependencies
-# Debian bullseye left LTS in 2026. deb.debian.org still serves the security index
-# but its packages moved to archive.debian.org, so every install 404ed.
-RUN sed -i 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' /etc/apt/sources.list \
-    && apt-get update -y && apt-get install -y build-essential git \
+RUN apt-get update -y && apt-get install -y build-essential git \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # prepare build dir
@@ -65,10 +62,7 @@ RUN mix release
 # the compiled release and other runtime necessities
 FROM ${RUNNER_IMAGE}
 
-# Debian bullseye left LTS in 2026. deb.debian.org still serves the security index
-# but its packages moved to archive.debian.org, so every install 404ed.
-RUN sed -i 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' /etc/apt/sources.list && \
-  apt-get update -y && \
+RUN apt-get update -y && \
   apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
