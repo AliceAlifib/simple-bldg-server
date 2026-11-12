@@ -60,7 +60,11 @@ kill_signal = 'SIGTERM'
     hard_limit = 1000
     soft_limit = 1000
 
+# A shared vCPU is capped at 6.25% of a core once its burst balance is spent.
+# One vCPU could not carry a twin rebuild (20-30% of a core): it throttled within
+# five minutes, and a 4 MB floor scan then took 11-15 s. Four vCPUs raise the
+# cap to 25%.
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
-  cpus = 1
+  cpus = 4
