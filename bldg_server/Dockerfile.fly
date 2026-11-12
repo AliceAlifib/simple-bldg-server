@@ -21,7 +21,10 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 FROM ${BUILDER_IMAGE} as builder
 
 # install build dependencies
-RUN apt-get update -y && apt-get install -y build-essential git \
+# Debian bullseye left LTS in 2026. deb.debian.org still serves the security index
+# but its packages moved to archive.debian.org, so every install 404ed.
+RUN sed -i 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' /etc/apt/sources.list \
+    && apt-get update -y && apt-get install -y build-essential git \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # prepare build dir
@@ -62,7 +65,10 @@ RUN mix release
 # the compiled release and other runtime necessities
 FROM ${RUNNER_IMAGE}
 
-RUN apt-get update -y && \
+# Debian bullseye left LTS in 2026. deb.debian.org still serves the security index
+# but its packages moved to archive.debian.org, so every install 404ed.
+RUN sed -i 's|deb.debian.org/debian-security|archive.debian.org/debian-security|' /etc/apt/sources.list && \
+  apt-get update -y && \
   apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
